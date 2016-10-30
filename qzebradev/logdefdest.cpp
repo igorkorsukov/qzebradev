@@ -5,15 +5,16 @@
 using namespace QZebraDev;
 
 NoopLogDest::NoopLogDest(const LogLayout &l)
-    : LogDest(l)
+    : LogDest(l), m_stream(&m_str)
 {
 
 }
 
 void NoopLogDest::write(const LogMsg &logMsg)
 {
-    QString str = m_layout.output(logMsg);
-    Q_UNUSED(str);
+    m_stream << m_layout.output(logMsg) << "\r\n";
+    m_stream.flush();
+    m_str.clear();
 }
 
 // FileLogDest

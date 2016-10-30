@@ -349,7 +349,7 @@ void Profiler::th_checkLongFuncs()
     }
 }
 
-const Profiler::Options &Profiler::options() const
+const Profiler::Options& Profiler::options()
 {
     return m_options;
 }

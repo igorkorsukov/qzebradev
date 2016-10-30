@@ -27,50 +27,51 @@ TEST_F(LoggerTests, Example)
     LOGD() << "This is debug";
 }
 
+struct OverheadFuncs : public Overhead::Funcs {
+    QString func() {
+        QString str;
+        for (int i = 0; i < 50; ++i) {
+            str += QString::number(i);
+        }
+        return str;
+    }
+
+    void pureFunc() {
+        QString str = func();
+        Q_UNUSED(str);
+    }
+
+    void overFunc() {
+        QString str = func();
+        Q_UNUSED(str);
+        LOGD() << str;
+    }
+};
+
 TEST_F(LoggerTests, Overhead_Noop)
 {
+    Logger::instance()->setLevel(Logger::Debug);
     Logger::instance()->clearLogDest();
     Logger::instance()->addLogDest(new NoopLogDest(LogLayout("${time} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like console
     Logger::instance()->addLogDest(new NoopLogDest(LogLayout("${longdate} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like file
 
-    struct Funcs : public Overhead::Funcs {
-        QString func() {
-            QString str;
-            for (int i = 0; i < 100; ++i) {
-                str += QString::number(i);
-            }
-            return str;
-        }
+    OverheadFuncs funcs;
 
-        void pureFunc() {
-            QString str = func();
-            Q_UNUSED(str);
-        }
+    Overhead::Result over = Overhead::overheadWithPrint("Logger", &funcs, 100000);
 
-        void overFunc() {
-            QString str = func();
-            Q_UNUSED(str);
-            LOGI() << str;
-        }
-    };
-
-    Funcs funcs;
-
-    Overhead::Result over = Overhead::overheadWithPrint("Logger", &funcs, 10000);
-
-    ASSERT_LT(over.overPercent, 100);
+    ASSERT_LT(over.overPercent, 25);
 }
 
-//TEST_F(LoggerTests, Overhead_Console)
-//{
-//    Logger::instance()->clearLogDest();
-//    Logger::instance()->addLogDest(new ConsoleLogDest(LogLayout("${time} | ${type} | ${tag} | ${thread} | ${message}")));
+TEST_F(LoggerTests, Overhead_Off)
+{
+    Logger::instance()->setLevel(Logger::Normal);
+    Logger::instance()->clearLogDest();
+    Logger::instance()->addLogDest(new NoopLogDest(LogLayout("${time} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like console
+    Logger::instance()->addLogDest(new NoopLogDest(LogLayout("${longdate} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like file
 
+    OverheadFuncs funcs;
 
+    Overhead::Result over = Overhead::overheadWithPrint("Logger", &funcs, 100000);
 
-//    Funcs funcs;
-
-//    Overhead::Result over = Overhead::overheadWithPrint("Logger", &funcs, 1000);
-
-//    ASSERT_GT(6, over.overPercent);
-//}
+    ASSERT_LT(over.overPercent, 0.5);
+}

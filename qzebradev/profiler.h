@@ -10,6 +10,14 @@
 #include <QThread>
 #include <QTimer>
 
+#ifndef STEP_TIME
+#define STEP_TIME(tag, info) if (Profiler::options().stepTimeEnabled) { Profiler::instance()->stepTime(tag, info); }
+#endif
+
+#ifndef BEGIN_STEP_TIME
+#define BEGIN_STEP_TIME(tag) if (Profiler::options().stepTimeEnabled) { Profiler::instance()->stepTime(tag, QString("------------ Start %1 -----------").arg(tag), true); }
+#endif
+
 #ifndef TRACEFUNC
 #define TRACEFUNC \
     static QString __func_info(Q_FUNC_INFO); \
@@ -39,6 +47,8 @@ public:
 
     struct Options {
 
+        bool stepTimeEnabled;
+
         bool funcsTimeEnabled;
         bool funcsTraceEnabled;
         int funcsMaxThreadCount;
@@ -46,7 +56,8 @@ public:
         bool longFuncDetectorEnabled;
         int longFuncThreshold;
 
-        Options() : funcsTimeEnabled(true), funcsTraceEnabled(false), funcsMaxThreadCount(100),
+        Options() : stepTimeEnabled(true),
+            funcsTimeEnabled(true), funcsTraceEnabled(false), funcsMaxThreadCount(100),
             longFuncDetectorEnabled(true), longFuncThreshold(3000) {}
     };
 
@@ -61,7 +72,7 @@ public:
 
     void setup(const Options &opt = Options(), Printer *printer = 0);
 
-    const Options& options() const;
+    static const Options& options();
     Printer* printer() const;
 
 

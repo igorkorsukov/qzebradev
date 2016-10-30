@@ -15,8 +15,6 @@
 #define FUNCNAME(fi) QZebraDev::Helpful::methodName(fi)
 
 //! Log
-#define IS_LOGLEVEL(_level)  (_level <= QZebraDev::Logger::instance()->level())
-#define LOG(type, tag, level)     if (IS_LOGLEVEL(level)) QZebraDev::LogStream(type, tag).stream()
 
 static const QString LOG_ERROR("ERROR");
 static const QString LOG_WARN("WARN");
@@ -30,18 +28,33 @@ static const QString LOG_TRACE_NAME = "TRACE";
 #define LOG_TAG CLASSNAME(Q_FUNC_INFO)
 #endif
 
-#define LOGE()                          LOG(LOG_ERROR, LOG_TAG, QZebraDev::Logger::Normal) << FUNCNAME(Q_FUNC_INFO)
-#define LOGW()                          LOG(LOG_WARN, LOG_TAG, QZebraDev::Logger::Normal) << FUNCNAME(Q_FUNC_INFO)
-#define LOGI()                          LOG(LOG_INFO, LOG_TAG, QZebraDev::Logger::Normal) << FUNCNAME(Q_FUNC_INFO)
-#define LOGD()                          LOG(LOG_DEBUG, LOG_TAG, QZebraDev::Logger::Debug) << FUNCNAME(Q_FUNC_INFO)
+#define IF_LOGLEVEL(_level)  if(_level <= QZebraDev::Logger::instance()->level())
+
+#define LOGE()      IF_LOGLEVEL(Logger::Normal) QZebraDev::LogStream(LOG_ERROR, LOG_TAG).stream() << FUNCNAME(Q_FUNC_INFO)
+#define LOGW()      IF_LOGLEVEL(Logger::Normal) QZebraDev::LogStream(LOG_WARN, LOG_TAG).stream() << FUNCNAME(Q_FUNC_INFO)
+#define LOGI()      IF_LOGLEVEL(Logger::Normal) QZebraDev::LogStream(LOG_INFO, LOG_TAG).stream() << FUNCNAME(Q_FUNC_INFO)
+#define LOGD()      IF_LOGLEVEL(Logger::Debug) QZebraDev::LogStream(LOG_DEBUG, LOG_TAG).stream() << FUNCNAME(Q_FUNC_INFO)
 
 //! Helps
+#define DEPRECATED LOGD() << "This function deprecated!!";
+#define DEPRECATED_USE(use) LOGD() << "This function deprecated!! Use:" << use;
+#define NOT_IMPLEMENTED LOGW() << "Not implemented!!";
+#define NOT_IMPL_RETURN NOT_IMPLEMENTED return
+#define NOT_SUPPORTED LOGW() << "Not supported!!";
+#define NOT_SUPPORTED_USE(use) LOGW() << "Not supported!! Use:" << use;
+
 #define ONLY_MAIN_THREAD \
     if (QThread::currentThread() != qApp->thread()) { \
     const QObject *o = dynamic_cast<const QObject*>(this); \
     LOGE() << "There should be only main thread(" << qApp->thread() << "), currentThread:" << QThread::currentThread() << "Object:" << (o ? o : 0); \
     Q_ASSERT(QThread::currentThread() == qApp->thread()); \
     }
+
+#define IF_ASSERT(cond) Q_ASSERT(cond); if(!(cond)) { LOGE() << "\"ASSERT FAILED!\":" << #cond << __FILE__ << __LINE__; } if(!(cond))
+#define IF_ASSERT_X(cond, info) if(!(cond)) { LOGE() << "\"ASSERT FAILED!\":" << #cond << info << __FILE__ << __LINE__; } Q_ASSERT(cond); if(!(cond))
+#define IF_ASSERT_NOOP(cond) Q_ASSERT(cond); if(!(cond)) { LOGE() << "\"ASSERT FAILED!\":" << #cond << __FILE__ << __LINE__; }
+#define IF_ASSERT_NOOP_X(cond, info) if(!(cond)) { LOGE() << "\"ASSERT FAILED!\":" << #cond << info << __FILE__ << __LINE__; } Q_ASSERT(cond);
+#define CHECK_PARENT(obj) if (obj) { IF_ASSERT(obj->parent()) { LOGE() << "There should be set parent"; } }
 
 
 #endif // LOG_H

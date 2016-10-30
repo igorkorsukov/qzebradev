@@ -14,6 +14,10 @@ public:
     NoopLogDest(const LogLayout &l);
 
     void write(const LogMsg &logMsg);
+
+private:
+    QTextStream m_stream;
+    QString m_str;
 };
 
 class FileLogDest : public LogDest

@@ -6,7 +6,7 @@ Product {
     type: ["staticlibrary"]
     
     Depends { name: "cpp" }
-    Depends { name: "Qt"; submodules: ['core'] }
+    Depends { name: "Qt"; submodules: ['core', 'core-private'] }
     
     files: [
         '**/*.cpp',

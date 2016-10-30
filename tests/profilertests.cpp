@@ -60,7 +60,5 @@ TEST_F(ProfilerTests, Overhead)
 
     Overhead::Result over = Overhead::overheadWithPrint("Profiler", &funcs, 1000000);
 
-    Profiler::instance()->printMain();
-
     ASSERT_LT(over.overPercent, 110);
 }
