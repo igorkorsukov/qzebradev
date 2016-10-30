@@ -71,7 +71,7 @@ Logger::Logger()
     : m_level(Normal)
 {
     m_types << "ERROR" << "WARN" << "INFO";
-    addLogDest(new OutputDest(LogLayout("${time} | ${type} | ${tag} | ${thread} | ${message}")));
+    addLogDest(new ConsoleLogDest(LogLayout("${time} | ${type} | ${tag} | ${thread} | ${message}")));
 
     setIsCatchQtMsg(true);
 }

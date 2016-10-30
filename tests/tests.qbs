@@ -2,17 +2,18 @@ import qbs
 
 Application {
 
-    name: "app"
+    name: "tests"
 
     Depends { name: "cpp" }
     Depends { name: "Qt"; submodules: [ 'core'] }
+    Depends { name: "gtest" }
     Depends { name: "qzebradev" }
 
-    targetName: "qzebradev_testapp"
+    targetName: "qzebradev_tests"
     consoleApplication: true
 
     cpp.cxxLanguageVersion: "c++11"
-    cpp.includePaths: ['../']
+    cpp.includePaths: ['../', '../gtest/include']
 
     Group {
         name: "The App itself"

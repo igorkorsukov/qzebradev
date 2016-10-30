@@ -8,6 +8,14 @@
 namespace QZebraDev
 {
 
+class NoopLogDest : public LogDest
+{
+public:
+    NoopLogDest(const LogLayout &l);
+
+    void write(const LogMsg &logMsg);
+};
+
 class FileLogDest : public LogDest
 {
 public:
@@ -27,10 +35,10 @@ private:
     QDate m_rotateDate;
 };
 
-class OutputDest : public LogDest
+class ConsoleLogDest : public LogDest
 {
 public:
-    explicit OutputDest(const LogLayout &l);
+    explicit ConsoleLogDest(const LogLayout &l);
 
     void write(const LogMsg &logMsg);
 };

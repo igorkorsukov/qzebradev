@@ -4,6 +4,18 @@
 
 using namespace QZebraDev;
 
+NoopLogDest::NoopLogDest(const LogLayout &l)
+    : LogDest(l)
+{
+
+}
+
+void NoopLogDest::write(const LogMsg &logMsg)
+{
+    QString str = m_layout.output(logMsg);
+    Q_UNUSED(str);
+}
+
 // FileLogDest
 FileLogDest::FileLogDest(const QString &path, const QString &name, const QString &ext, const LogLayout &l)
     : LogDest(l), m_path(path), m_name(name), m_ext(ext), m_stream(&m_file)
@@ -50,46 +62,14 @@ void FileLogDest::rotate()
 
 
 // OutputDest
-OutputDest::OutputDest(const LogLayout &l)
+ConsoleLogDest::ConsoleLogDest(const LogLayout &l)
     : LogDest(l)
 {
 }
 
-#if defined(Q_OS_WIN)
-#include "qt_windows.h"
-#include <QTextCodec>
-#include <QTextStream>
-
-struct OutStream {
-    QTextStream cout;
-    OutStream() : cout(stdout) {
-        QTextCodec *codec = QTextCodec::codecForName("CP1251");
-        cout.setCodec(codec);
-    }
-};
-
-void OutputDest::write(const LogMsg &logMsg)
-{
-    static OutStream stream;
-
-    stream.cout << m_layout.output(logMsg) << "\r\n";
-    stream.cout.flush();
-}
-
-StdOutDest::StdOutDest(const LogLayout &l)
-    : LogDest(l)
-{
-}
-
-void StdOutDest::write(const LogMsg &logMsg)
-{
-    fprintf(stderr, "%s\n", qPrintable(m_layout.output(logMsg)));
-    fflush(stderr);
-}
-
-#elif defined (Q_OS_ANDROID)
+#if defined (Q_OS_ANDROID)
 #include <android/log.h>
-void OutputDest::write(const LogMsg &logMsg)
+void ConsoleLogDest::write(const LogMsg &logMsg)
 {
     static QString INFO("INFO");
     static QString WARN("WARN");
@@ -105,11 +85,24 @@ void OutputDest::write(const LogMsg &logMsg)
 }
 
 #else
-#include <cstdio>
-void OutputDest::write(const LogMsg &logMsg)
+
+#include <QTextCodec>
+#include <QTextStream>
+
+struct StdOut {
+    QTextStream stream;
+    StdOut() : stream(stdout) {
+        QTextCodec *c = QTextCodec::codecForLocale();
+        stream.setCodec(c);
+    }
+};
+
+void ConsoleLogDest::write(const LogMsg &logMsg)
 {
-    fprintf(stderr, "%s\n", qPrintable(m_layout.output(logMsg)));
-    fflush(stderr);
+    static StdOut out;
+
+    out.stream << m_layout.output(logMsg) << "\r\n";
+    out.stream.flush();
 }
 
 #endif

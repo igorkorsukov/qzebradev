@@ -4,6 +4,7 @@ Project {
     
     references: [
         "qzebradev/qzebradev.qbs",
-        "testapp/testapp.qbs"
+        "gtest/gtest.qbs",
+        "tests/tests.qbs"
     ]  
 }

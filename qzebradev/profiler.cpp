@@ -18,6 +18,8 @@ Profiler::Profiler()
     m_funcs.threads.fill(0, 1);
     m_funcs.timers.fill(FuncTimers(), 1);
     m_funcs.threads[MAIN_THREAD_INDEX] = reinterpret_cast<quintptr>(qApp->thread());
+
+    m_printer = new Printer();
 }
 
 Profiler::~Profiler()
@@ -67,7 +69,9 @@ void Profiler::setup(const Options &opt, Printer *printer)
         m_detector.thread.start();
     }
 
-    m_printer = printer ? printer : new Printer();
+    if (printer) {
+        m_printer = printer;
+    }
 }
 
 void Profiler::stepTime(const QString &tag, const QString &info, bool isRestart)
