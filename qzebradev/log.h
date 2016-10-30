@@ -43,12 +43,5 @@ static const QString LOG_TRACE_NAME = "TRACE";
     Q_ASSERT(QThread::currentThread() == qApp->thread()); \
     }
 
-//! Profiler
-#define TRACEFUNC_INFO(info) \
-    QZebraDev::FuncMarker __funcMarkerInfo(Profiler::instance()->static_info(info));
-
-#define TRACEFUNC \
-    static QString __func_info(Q_FUNC_INFO); \
-    QZebraDev::FuncMarker __funcMarker(__func_info);
 
 #endif // LOG_H

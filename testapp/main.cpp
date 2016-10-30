@@ -15,8 +15,8 @@ int main(int argc, char **argv)
 
     QZebraDev::DefaultSetup::setup();
 
-    LogTest log;
-    log.run();
+//    LogTest log;
+//    log.run();
 
     ProfilerTest prof;
     prof.run();

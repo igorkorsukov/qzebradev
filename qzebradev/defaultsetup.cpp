@@ -6,5 +6,5 @@ using namespace QZebraDev;
 
 void DefaultSetup::setup()
 {
-    Profiler::instance()->setPrinter(new ProfilerLogPrinter());
+    Profiler::instance()->setup(Profiler::Options(), new ProfilerLogPrinter());
 }

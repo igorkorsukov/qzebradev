@@ -1,39 +1,23 @@
 #include "profiler.h"
+#include <QDebug>
 #include <QCoreApplication>
 #include <QPair>
-#include "log.h"
 
 using namespace QZebraDev;
 
-Profiler* QZebraDev::Profiler::s_profiler = 0;
-bool QZebraDev::Profiler::enabled(true);
-bool QZebraDev::Profiler::trace(false);
-bool QZebraDev::Profiler::longFuncDetectorEnabled(true);
+Profiler* Profiler::s_profiler(0);
+Profiler::Options Profiler::m_options;
 
 struct Sleep : public QThread { using QThread::msleep; };
 
 #define MAIN_THREAD_INDEX 0
 
-#define LONG_FUNC_TRESHOLD 3000 // порог (в мс) после которого функция считается зависшей
-#define LONG_FUNC_CHECK_PERIOD 3000 // интервал (в мс) с которым запускается проверка на зависшие функции
-
 Profiler::Profiler()
     : m_printer(0)
 {
-    for (int i = 0; i < THREAD_MAX_COUNT; ++i) {
-        m_funcThreads[i] = 0;
-    }
-    m_funcThreads[MAIN_THREAD_INDEX] = reinterpret_cast<quintptr>(qApp->thread());
-
-    m_dummy = QString("Exhausted of a custom count of info, max 1000");
-
-    if (longFuncDetectorEnabled) {
-        m_detector.enabled = true;
-        m_detector.timer.start(LONG_FUNC_CHECK_PERIOD);
-        m_detector.timer.moveToThread(&m_detector.thread);
-        connect(&m_detector.timer, SIGNAL(timeout()), this, SLOT(th_checkLongFuncs()), Qt::DirectConnection);
-        m_detector.thread.start();
-    }
+    m_funcs.threads.fill(0, 1);
+    m_funcs.timers.fill(FuncTimers(), 1);
+    m_funcs.threads[MAIN_THREAD_INDEX] = reinterpret_cast<quintptr>(qApp->thread());
 }
 
 Profiler::~Profiler()
@@ -42,36 +26,58 @@ Profiler::~Profiler()
     delete m_printer;
 
     {
-        QMutexLocker locker(&m_funcMutex);
-        for (int i = 0; i < THREAD_MAX_COUNT; ++i) {
-            if (i == MAIN_THREAD_INDEX && longFuncDetectorEnabled) {
+        QMutexLocker locker(&m_funcs.mutex);
+        for (int i = 0; i < m_funcs.threads.count(); ++i) {
+            if (i == MAIN_THREAD_INDEX && m_detector.enabled) {
                 m_detector.mutex.lock();
             }
 
-            FuncTimers timers = m_funcTimers[i];
+            FuncTimers timers = m_funcs.timers[i];
             qDeleteAll(timers);
 
-            if (i == MAIN_THREAD_INDEX && longFuncDetectorEnabled) {
+            if (i == MAIN_THREAD_INDEX && m_detector.enabled) {
                 m_detector.mutex.unlock();
             }
         }
     }
     
     {
-        QMutexLocker locker(&m_stepMutex);
-        qDeleteAll(m_stepTimers);
-        m_stepTimers.clear();
+        QMutexLocker locker(&m_steps.mutex);
+        qDeleteAll(m_steps.timers);
+        m_steps.timers.clear();
     }
+}
+
+void Profiler::setup(const Options &opt, Printer *printer)
+{
+    m_options = opt;
+    m_options.funcsMaxThreadCount = m_options.funcsMaxThreadCount < 1 ? 1 : m_options.funcsMaxThreadCount;
+
+    //! Func timers
+    m_funcs.timers.fill(FuncTimers(), m_options.funcsMaxThreadCount);
+    m_funcs.threads.fill(0, m_options.funcsMaxThreadCount);
+    m_funcs.threads[MAIN_THREAD_INDEX] = reinterpret_cast<quintptr>(qApp->thread());
+
+    //! Long func detector
+    if (m_options.longFuncDetectorEnabled) {
+        m_detector.enabled = true;
+        m_detector.timer.start(m_options.longFuncThreshold - 50);
+        m_detector.timer.moveToThread(&m_detector.thread);
+        connect(&m_detector.timer, SIGNAL(timeout()), this, SLOT(th_checkLongFuncs()), Qt::DirectConnection);
+        m_detector.thread.start();
+    }
+
+    m_printer = printer ? printer : new Printer();
 }
 
 void Profiler::stepTime(const QString &tag, const QString &info, bool isRestart)
 {
-    QMutexLocker locker(&m_stepMutex);
-    StepTimer *stepTimer = m_stepTimers.value(tag, NULL);
+    QMutexLocker locker(&m_steps.mutex);
+    StepTimer *stepTimer = m_steps.timers.value(tag, NULL);
     if (!stepTimer) {
         stepTimer = new StepTimer();
         stepTimer->start();
-        m_stepTimers.insert(tag, stepTimer);
+        m_steps.timers.insert(tag, stepTimer);
     }
     
     if (isRestart) {
@@ -85,9 +91,9 @@ void Profiler::stepTime(const QString &tag, const QString &info, bool isRestart)
 
 void Profiler::beginFunc(const QString &func, quintptr th)
 {
-    int index = threadIndex(th);
+    int index = m_funcs.threadIndex(th);
     if (index == -1) {
-        index = threadAdd(th);
+        index = m_funcs.addThread(th);
         if (index == -1) {
             return;
         }
@@ -95,10 +101,10 @@ void Profiler::beginFunc(const QString &func, quintptr th)
 
     m_detector.lockIfNeed(index);
 
-    FuncTimer *timer = m_funcTimers[index].value(&func, NULL);
+    FuncTimer *timer = m_funcs.timers[index].value(&func, NULL);
     if (!timer) {
         timer = new FuncTimer(func);
-        m_funcTimers[index].insert(&func, timer);
+        m_funcs.timers[index].insert(&func, timer);
     } else {
         if (timer->timer.isValid()) {
             printer()->printDebug(QString("Recursion detected, measure only first call, func: ") + func);
@@ -113,14 +119,14 @@ void Profiler::beginFunc(const QString &func, quintptr th)
 
 void Profiler::endFunc(const QString &func, quintptr th)
 {
-    int index = threadIndex(th);
+    int index = m_funcs.threadIndex(th);
     if (index == -1) {
         return;
     }
 
     m_detector.lockIfNeed(index);
     
-    FuncTimer *timer = m_funcTimers[index].value(&func, NULL);
+    FuncTimer *timer = m_funcs.timers[index].value(&func, NULL);
     if (timer) {
         if (!timer->timer.isValid()) {
             //! NOTE Вероятно рекурсивный вызов
@@ -132,7 +138,7 @@ void Profiler::endFunc(const QString &func, quintptr th)
         timer->sumtime += timer->calltime * 0.0000001;
         timer->timer.invalidate();
         
-        if (Profiler::trace) {
+        if (m_options.funcsTraceEnabled) {
             printer()->printTrace(func, timer->calltime, timer->callcount, timer->sumtime);
         }
     }
@@ -140,26 +146,24 @@ void Profiler::endFunc(const QString &func, quintptr th)
     m_detector.unlockIfNeed(index);
 }
 
-const QString& Profiler::static_info(const QString &info)
+const QString& Profiler::staticInfo(const QString &info)
 {
-    for (int i = 0; i < m_static_info.count(); ++i) {
-        if (m_static_info.at(i) == info) {
-            return m_static_info.at(i);
+    int count = m_funcs.staticInfo.count();
+    for (int i = 0; i < count; ++i) {
+        if (m_funcs.staticInfo.at(i) == info) {
+            return m_funcs.staticInfo.at(i);
         }
     }
-    
-    if (m_static_info.count() == 999) {
-        return m_dummy;
-    }
-    
-    m_static_info.append(info);
-    return m_static_info.last();
+
+    m_funcs.staticInfo.append(info);
+    return m_funcs.staticInfo.last();
 }
 
-int Profiler::threadIndex(quintptr th) const
+int Profiler::FuncsData::threadIndex(quintptr th) const
 {
-    for (int i = 0; i < THREAD_MAX_COUNT; ++i) {
-        quintptr thi = m_funcThreads[i];
+    int count = this->threads.count();
+    for (int i = 0; i < count; ++i) {
+        quintptr thi = this->threads[i];
         if (thi == th) {
             return i;
         }
@@ -171,18 +175,19 @@ int Profiler::threadIndex(quintptr th) const
     return -1;
 }
 
-int Profiler::threadAdd(quintptr th)
+int Profiler::FuncsData::addThread(quintptr th)
 {
-    QMutexLocker locker(&m_funcMutex);
+    QMutexLocker locker(&this->mutex);
     int index = threadIndex(th);
     if (index > -1) {
         return index;
     }
     
-    for (int i = 0; i < THREAD_MAX_COUNT; ++i) {
-        quintptr thi = m_funcThreads[i];
+    int count = this->threads.count();
+    for (int i = 0; i < count; ++i) {
+        quintptr thi = this->threads[i];
         if (thi == 0) {
-            m_funcThreads[i] = th;
+            this->threads[i] = th;
             return i;
         }
     }
@@ -191,23 +196,23 @@ int Profiler::threadAdd(quintptr th)
 
 void Profiler::clear()
 {
-    QMutexLocker flocker(&m_funcMutex);
-    for (int i = 0; i < THREAD_MAX_COUNT; ++i) {
+    QMutexLocker flocker(&m_funcs.mutex);
+    for (int i = 0; i < m_funcs.threads.count(); ++i) {
 
         m_detector.lockIfNeed(i);
 
-        FuncTimers timers = m_funcTimers[i];
+        FuncTimers timers = m_funcs.timers[i];
         qDeleteAll(timers);
-        m_funcTimers[i] = FuncTimers();
-        m_funcThreads[i] = 0;
+        m_funcs.timers[i] = FuncTimers();
+        m_funcs.threads[i] = 0;
 
         m_detector.unlockIfNeed(i);
     }
-    m_funcThreads[MAIN_THREAD_INDEX] = reinterpret_cast<quintptr>(qApp->thread());
+    m_funcs.threads[MAIN_THREAD_INDEX] = reinterpret_cast<quintptr>(qApp->thread());
 
-    QMutexLocker slocker(&m_stepMutex);
-    qDeleteAll(m_stepTimers);
-    m_stepTimers.clear();
+    QMutexLocker slocker(&m_steps.mutex);
+    qDeleteAll(m_steps.timers);
+    m_steps.timers.clear();
 }
 
 bool Profiler::isLessBySum(const Profiler::FuncTimer* f, const Profiler::FuncTimer* s)
@@ -217,11 +222,9 @@ bool Profiler::isLessBySum(const Profiler::FuncTimer* f, const Profiler::FuncTim
 
 QString Profiler::mainString()
 {
-    ONLY_MAIN_THREAD; // т.к. longFuncDetectorEnabled thread unsafe
-
     m_detector.lockIfNeed(MAIN_THREAD_INDEX);
 
-    QList<FuncTimer*> list = m_funcTimers[MAIN_THREAD_INDEX].values();
+    QList<FuncTimer*> list = m_funcs.timers[MAIN_THREAD_INDEX].values();
     QString result = prepare("Main thread. ", list);
 
     m_detector.unlockIfNeed(MAIN_THREAD_INDEX);
@@ -232,13 +235,13 @@ QString Profiler::mainString()
 QString Profiler::threadsString()
 {
     FuncTimers timers;
-    for (int i = 1; i < THREAD_MAX_COUNT; ++i) {
-        quintptr th = m_funcThreads[i];
+    for (int i = 1; i < m_funcs.threads.count(); ++i) {
+        quintptr th = m_funcs.threads[i];
         if (th == 0) {
             break;
         }
 
-        QList<FuncTimer*> list = m_funcTimers[i].values();
+        QList<FuncTimer*> list = m_funcs.timers[i].values();
         for (int j = 0; j < list.count(); ++j) {
             FuncTimer *tht = list.at(j);
             FuncTimer *timer = timers.value(&tht->func, NULL);
@@ -261,21 +264,19 @@ QString Profiler::threadsString()
 
 void Profiler::printMain()
 {
-    LOGI() << mainString();
+    printer()->printInfo(mainString());
 }
 
 void Profiler::printThreads()
 {
-    LOGI() << threadsString();
+    printer()->printInfo(threadsString());
 }
 
 Profiler::Data Profiler::mainData() const
 {
-    ONLY_MAIN_THREAD; // т.к. longFuncDetectorEnabled thread unsafe
-
     m_detector.lockIfNeed(MAIN_THREAD_INDEX);
 
-    QList<FuncTimer*> list = m_funcTimers[MAIN_THREAD_INDEX].values();
+    QList<FuncTimer*> list = m_funcs.timers[MAIN_THREAD_INDEX].values();
     qSort(list.begin(), list.end(), Profiler::isLessBySum);
     int count = 150;
     count = list.count() < count ? list.count() : count;
@@ -323,12 +324,10 @@ void Profiler::th_checkLongFuncs()
         Sleep::msleep(10); //! NOTE Подождём, чтобы вышли потоки исполнения из beginFunc и endFunc
 
         QMutexLocker locker(&m_detector.mutex);
-        foreach (FuncTimer *f, m_funcTimers[MAIN_THREAD_INDEX]) {
-            if (f->timer.isValid() && f->timer.elapsed() > LONG_FUNC_TRESHOLD) {
+        foreach (const FuncTimer *f, m_funcs.timers[MAIN_THREAD_INDEX]) {
+            if (f->timer.isValid() && f->timer.elapsed() > m_options.longFuncThreshold) {
                 const qint64 t = f->timer.nsecsElapsed();
-                longFuncs.append(QPair<qint64, QString>(t, QString("%1: %2 sec")
-                                                        .arg(f->func)
-                                                        .arg(t / 1000000000.0)));
+                longFuncs.append(QPair<qint64, QString>(t, QString("%1: %2 sec").arg(f->func).arg(t / 1000000000.0)));
             }
         }
     }
@@ -346,17 +345,13 @@ void Profiler::th_checkLongFuncs()
     }
 }
 
-void Profiler::setPrinter(Printer *printer)
+const Profiler::Options &Profiler::options() const
 {
-    delete m_printer;
-    m_printer = printer;
+    return m_options;
 }
 
 Profiler::Printer* Profiler::printer() const
 {
-    if (!m_printer) {
-        m_printer = new Printer();
-    }
     return m_printer;
 }
 
@@ -390,7 +385,7 @@ void Profiler::Printer::printStep(qint64 beginMs, qint64 stepMs, const QString &
     printDebug(str);
 }
 
-void Profiler::Printer::printTrace(const QString& func, qint64 calltime, qint64 callcount, qint64 sumtime)
+void Profiler::Printer::printTrace(const QString& func, qint64 calltime, qint64 callcount, double sumtime)
 {
     static const QString CALLTIME("calltime:");
     static const QString CALLCOUNT("callcount:");

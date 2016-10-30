@@ -2,6 +2,8 @@
 #include "qzebradev/log.h"
 #include "benchmark.h"
 
+#include <QVector>
+
 using namespace QZebraDev;
 
 ProfilerTest::ProfilerTest()
@@ -11,7 +13,6 @@ ProfilerTest::ProfilerTest()
 
 void ProfilerTest::run()
 {
-
 
     benchmark();
 
