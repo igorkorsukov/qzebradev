@@ -11,11 +11,8 @@ public:
     void run();
 
 private:
-    QString func();
-    void func_pure();
-    void func_prof();
+    void benchmark() const;
 
-    qint64 overTest();
 };
 
 #endif // PROFILERTEST_H

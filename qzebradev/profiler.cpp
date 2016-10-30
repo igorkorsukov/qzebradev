@@ -1,13 +1,14 @@
 #include "profiler.h"
 #include <QCoreApplication>
-#include <QDateTime>
 #include <QPair>
-#include "helpfulmacro.h"
+#include "log.h"
 
-Profiler *Profiler::s_profiler = 0;
-bool Profiler::enabled(true);
-bool Profiler::trace(false);
-bool Profiler::longFuncDetectorEnabled(true);
+using namespace QZebraDev;
+
+Profiler* QZebraDev::Profiler::s_profiler = 0;
+bool QZebraDev::Profiler::enabled(true);
+bool QZebraDev::Profiler::trace(false);
+bool QZebraDev::Profiler::longFuncDetectorEnabled(true);
 
 struct Sleep : public QThread { using QThread::msleep; };
 
@@ -16,18 +17,14 @@ struct Sleep : public QThread { using QThread::msleep; };
 #define LONG_FUNC_TRESHOLD 3000 // порог (в мс) после которого функция считается зависшей
 #define LONG_FUNC_CHECK_PERIOD 3000 // интервал (в мс) с которым запускается проверка на зависшие функции
 
-static const QString CallTime("calltime:");
-static const QString CallCount("callcount:");
-static const QString SumTime("sumtime:");
-
 Profiler::Profiler()
+    : m_printer(0)
 {
     for (int i = 0; i < THREAD_MAX_COUNT; ++i) {
         m_funcThreads[i] = 0;
     }
     m_funcThreads[MAIN_THREAD_INDEX] = reinterpret_cast<quintptr>(qApp->thread());
-    
-    m_static_info.reserve(1000);
+
     m_dummy = QString("Exhausted of a custom count of info, max 1000");
 
     if (longFuncDetectorEnabled) {
@@ -42,6 +39,8 @@ Profiler::Profiler()
 Profiler::~Profiler()
 {
     s_profiler = 0;
+    delete m_printer;
+
     {
         QMutexLocker locker(&m_funcMutex);
         for (int i = 0; i < THREAD_MAX_COUNT; ++i) {
@@ -78,8 +77,8 @@ void Profiler::stepTime(const QString &tag, const QString &info, bool isRestart)
     if (isRestart) {
         stepTimer->start();
     }
-    
-    LOGD() << QString::number(stepTimer->beginMs()) << "/" << QString::number(stepTimer->stepMs()) << "ms" << info;
+
+    printer()->printStep(stepTimer->beginMs(), stepTimer->stepMs(), info);
     
     stepTimer->nextStep();
 }
@@ -102,7 +101,7 @@ void Profiler::beginFunc(const QString &func, quintptr th)
         m_funcTimers[index].insert(&func, timer);
     } else {
         if (timer->timer.isValid()) {
-            LOGD() << "Recursion detected, measure only first call, func:" << func;
+            printer()->printDebug(QString("Recursion detected, measure only first call, func: ") + func);
             return;
         }
     }
@@ -134,12 +133,7 @@ void Profiler::endFunc(const QString &func, quintptr th)
         timer->timer.invalidate();
         
         if (Profiler::trace) {
-            if (timer->calltime > 10000 || timer->callcount%100 == 1.) {
-                LOGD() << timer->func
-                       << CallTime << timer->calltime
-                       << CallCount << timer->callcount
-                       << SumTime << timer->sumtime;
-            }
+            printer()->printTrace(func, timer->calltime, timer->callcount, timer->sumtime);
         }
     }
 
@@ -348,8 +342,82 @@ void Profiler::th_checkLongFuncs()
     }
 
     if (!funcs.isEmpty()) {
-        LOGW() << "functions that hang main thread:\n" << funcs.join("\n");
+        printer()->printLongFuncs(funcs);
     }
+}
+
+void Profiler::setPrinter(Printer *printer)
+{
+    delete m_printer;
+    m_printer = printer;
+}
+
+Profiler::Printer* Profiler::printer() const
+{
+    if (!m_printer) {
+        m_printer = new Printer();
+    }
+    return m_printer;
+}
+
+Profiler::Printer::~Printer()
+{}
+
+void Profiler::Printer::printDebug(const QString &str)
+{
+    qDebug() << str;
+}
+
+void Profiler::Printer::printInfo(const QString &str)
+{
+    qDebug() << str;
+}
+
+void Profiler::Printer::printStep(qint64 beginMs, qint64 stepMs, const QString &info)
+{
+    static const QString SEP("/");
+    static const QString MS(" ms");
+
+    QString str;
+    str.reserve(100);
+    str
+            .append(QString::number(beginMs))
+            .append(SEP)
+            .append(QString::number(stepMs))
+            .append(MS)
+            .append(info);
+
+    printDebug(str);
+}
+
+void Profiler::Printer::printTrace(const QString& func, qint64 calltime, qint64 callcount, qint64 sumtime)
+{
+    static const QString CALLTIME("calltime:");
+    static const QString CALLCOUNT("callcount:");
+    static const QString SUMTIME("sumtime:");
+
+    if (calltime > 10000 || callcount%100 == 1.) {
+        QString str;
+        str.reserve(100);
+        str
+                .append(func)
+                .append(CALLTIME).append(QString::number(calltime))
+                .append(CALLCOUNT).append(QString::number(callcount))
+                .append(SUMTIME).append(QString::number(sumtime));
+
+        printDebug(str);
+    }
+}
+
+void Profiler::Printer::printLongFuncs(const QStringList &funcsStack)
+{
+    QString str;
+    str.reserve(100);
+    str
+            .append("Long functions on main thread:\n")
+            .append(funcsStack.join("\n"));
+
+    printInfo(str);
 }
 
 #define FORMAT(str, width) QString(str).leftJustified(width, ' ', true).append("  ").toLatin1().constData()

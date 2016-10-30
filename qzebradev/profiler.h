@@ -7,9 +7,9 @@
 #include <QHash>
 #include <QTextStream>
 #include <QThread>
-#include <QVector>
-#include <QDateTime>
 #include <QTimer>
+
+namespace QZebraDev {
 
 #define THREAD_MAX_COUNT 100
 
@@ -36,6 +36,18 @@ public:
 
     QString mainString();
     QString threadsString();
+
+    struct Printer {
+        virtual ~Printer();
+        virtual void printDebug(const QString &str);
+        virtual void printInfo(const QString &str);
+        virtual void printStep(qint64 beginMs, qint64 stepMs, const QString &info);
+        virtual void printTrace(const QString& func, qint64 calltime, qint64 callcount, qint64 sumtime);
+        virtual void printLongFuncs(const QStringList &funcsStack);
+    };
+
+    void setPrinter(Printer *printer);
+    Printer* printer() const;
 
     void printMain();
     void printThreads();
@@ -109,6 +121,8 @@ private:
     
     QList<QString> m_static_info;
     QString m_dummy;
+
+    mutable Printer *m_printer;
     
     mutable LongFuncDetector m_detector;
 };
@@ -133,5 +147,7 @@ struct FuncMarker
     const QString &func;
     quintptr th;
 };
+
+}
 
 #endif // PROFILER_H

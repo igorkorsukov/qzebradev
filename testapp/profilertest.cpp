@@ -1,8 +1,8 @@
 #include "profilertest.h"
-#include "qzebradev/helpfulmacro.h"
+#include "qzebradev/log.h"
+#include "benchmark.h"
 
-#include <QDebug>
-#include <QElapsedTimer>
+using namespace QZebraDev;
 
 ProfilerTest::ProfilerTest()
 {
@@ -11,55 +11,35 @@ ProfilerTest::ProfilerTest()
 
 void ProfilerTest::run()
 {
-    qint64 sum = 0;
-    for (int i = 0; i < 10; ++i) {
-        sum += overTest();
-    }
 
-    qDebug() << "avgover:" << sum / 10 << "ms";
+
+    benchmark();
+
+    Profiler::instance()->printMain();
 }
 
-qint64 ProfilerTest::overTest()
+void ProfilerTest::benchmark() const
 {
-    int count = 1000000;
+    struct Funcs : public Benchmark::OverheadFuncs {
+        QString func() {
+            static int i = 0;
+            return QString::number(++i);
+        }
 
-    QElapsedTimer timer;
-    timer.start();
-    qint64 start = timer.elapsed();
-    for (int i = 0; i < count; ++i) {
-        func_pure();
-    }
-    qint64 endpure = timer.elapsed();
+        void pureFunc() {
+            func();
+        }
 
-    for (int i = 0; i < count; ++i) {
-        func_prof();
-    }
-    qint64 endprof = timer.elapsed();
+        void overFunc() {
+            TRACEFUNC;
+            func();
+        }
+    };
 
-    qint64 timepure = endpure - start;
-    qint64 timeprof = endprof - endpure;
-    qint64 timeover = timeprof - timepure;
+    Funcs funcs;
 
-    qDebug() << "timepure:" << timepure << "timeprof:" << timeprof << "timeover:" << timeover << "ms";
-
-    return timeover;
+    Benchmark::overheadPrint("Profiler", &funcs, 1000000);
 }
 
-QString ProfilerTest::func()
-{
-    static int i = 0;
-    QString str = QString("%1").arg(++i);
-    return str;
-}
 
-void ProfilerTest::func_pure()
-{
-    func();
-}
-
-void ProfilerTest::func_prof()
-{
-    TRACEFUNC;
-    func();
-}
 
