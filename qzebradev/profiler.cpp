@@ -219,86 +219,73 @@ void Profiler::clear()
     m_steps.timers.clear();
 }
 
-bool Profiler::isLessBySum(const Profiler::FuncTimer* f, const Profiler::FuncTimer* s)
+Profiler::Data Profiler::threadsData(Data::Mode mode) const
 {
-    return f->sumtime > s->sumtime;
-}
+    if (mode != Data::OnlyOther) {
+        m_detector.lockIfNeed(MAIN_THREAD_INDEX);
+    }
 
-QString Profiler::mainString()
-{
-    m_detector.lockIfNeed(MAIN_THREAD_INDEX);
+    Data data;
+    data.mainThread = m_funcs.threads[MAIN_THREAD_INDEX];
 
-    QList<FuncTimer*> list = m_funcs.timers[MAIN_THREAD_INDEX].values();
-    QString result = prepare("Main thread. ", list);
+    for (int i = 0; i < m_funcs.threads.count(); ++i) {
 
-    m_detector.unlockIfNeed(MAIN_THREAD_INDEX);
-
-    return result;
-}
-
-QString Profiler::threadsString()
-{
-    FuncTimers timers;
-    for (int i = 1; i < m_funcs.threads.count(); ++i) {
         quintptr th = m_funcs.threads[i];
         if (th == 0) {
             break;
         }
 
-        QList<FuncTimer*> list = m_funcs.timers[i].values();
-        for (int j = 0; j < list.count(); ++j) {
-            FuncTimer *tht = list.at(j);
-            FuncTimer *timer = timers.value(&tht->func, NULL);
-            if (!timer) {
-                timer = new FuncTimer(tht->func);
-                timers.insert(&tht->func, timer);
+        if (i == MAIN_THREAD_INDEX) {
+            if (mode == Data::OnlyOther) {
+                continue;
             }
+        } else {
+            if (mode == Data::OnlyMain) {
+                continue;
+            }
+        }
 
-            timer->callcount += tht->callcount;
-            timer->sumtime += tht->sumtime;
+        Data::Thread thdata;
+        thdata.thread = th;
+
+        FuncTimers timers = m_funcs.timers[i];
+        foreach (const FuncTimer* ft, timers) {
+            Data::Func f(
+                        ft->func,
+                        ft->callcount,
+                        (ft->callcount ? (ft->sumtime / static_cast<double>(ft->callcount)) : 0),
+                        ft->sumtime
+                        );
+
+            thdata.funcs << f;
+        }
+
+        data.threads[thdata.thread] = thdata;
+
+        if (i == MAIN_THREAD_INDEX) {
+            if (mode == Data::OnlyMain) {
+                break;
+            }
         }
     }
-    
-    QList<FuncTimer*> list = timers.values();
-    QString str = prepare("Other threads. ", list);
-    qDeleteAll(list);
-    
-    return str;
-}
 
-void Profiler::printMain()
-{
-    printer()->printInfo(mainString());
-}
-
-void Profiler::printThreads()
-{
-    printer()->printInfo(threadsString());
-}
-
-Profiler::Data Profiler::mainData() const
-{
-    m_detector.lockIfNeed(MAIN_THREAD_INDEX);
-
-    QList<FuncTimer*> list = m_funcs.timers[MAIN_THREAD_INDEX].values();
-    qSort(list.begin(), list.end(), Profiler::isLessBySum);
-    int count = 150;
-    count = list.count() < count ? list.count() : count;
-    Data data;
-    for(int i(0); i < count; i++)
-    {
-        FuncTimer *info = list.at(i);
-        QVariantMap obj;
-        obj["Function"] = info->func;
-        obj["Call time"] = info->callcount ? (info->sumtime / info->callcount) : 0;
-        obj["Call count"] = info->callcount;
-        obj["Sum time"] = info->sumtime;
-        data.append(obj);
+    if (mode != Data::OnlyOther) {
+        m_detector.unlockIfNeed(MAIN_THREAD_INDEX);
     }
 
-    m_detector.unlockIfNeed(MAIN_THREAD_INDEX);
-
     return data;
+}
+
+QString Profiler::threadsDataString(Data::Mode mode) const
+{
+    Profiler::Data data = threadsData(mode);
+    return printer()->formatData(data, mode, m_options.dataTopCount);
+}
+
+void Profiler::printThreadsData(Data::Mode mode) const
+{
+    Profiler::Data data = threadsData(mode);
+    printer()->printData(data, mode, m_options.dataTopCount);
 }
 
 void Profiler::LongFuncDetector::lockIfNeed(int index)
@@ -419,32 +406,66 @@ void Profiler::Printer::printLongFuncs(const QStringList &funcsStack)
     printInfo(str);
 }
 
+struct IsLessBySum {
+    bool operator()(const Profiler::Data::Func &f, const Profiler::Data::Func &s)
+    {
+        return f.sumtime > s.sumtime;
+    }
+};
+
+void Profiler::Printer::printData(const Data &data, Data::Mode mode, int maxcount)
+{
+    printInfo(formatData(data, mode, maxcount));
+}
+
+QString Profiler::Printer::formatData(const Data &data, Data::Mode mode, int maxcount) const
+{
+    QString str;
+    QTextStream stream(&str);
+    stream << "\n\n";
+
+    if (mode == Data::OnlyMain || mode == Data::All) {
+
+        Data::Thread thdata = data.threads[data.mainThread];
+        std::sort(thdata.funcs.begin(), thdata.funcs.end(), IsLessBySum());
+        dataToStream(stream, QString("Main thread. Top %1 by sum time (total count: %2)").arg(maxcount).arg(thdata.funcs.count()), thdata.funcs, maxcount);
+    }
+
+    if (mode == Data::OnlyOther || mode == Data::All) {
+
+        QList<Data::Func> funcs;
+        QHash<quintptr, Data::Thread>::ConstIterator it = data.threads.constBegin(), end = data.threads.constEnd();
+        while (it != end) {
+            if (it.key() == data.mainThread) {
+                ++it;
+                continue;
+            }
+
+            funcs << it.value().funcs;
+
+            ++it;
+        }
+
+        std::sort(funcs.begin(), funcs.end(), IsLessBySum());
+        dataToStream(stream, QString("Other threads. Top %1 by sum time (total count: %2)").arg(maxcount).arg(funcs.count()), funcs, maxcount);
+    }
+
+    return str;
+}
+
 #define FORMAT(str, width) QString(str).leftJustified(width, ' ', true).append("  ").toLatin1().constData()
 #define TITLE(str) FORMAT(QString(str), 18)
 #define VALUE(val, unit) FORMAT(QString::number(val) + unit, 18)
 #define VALUE_D(val, unit) FORMAT(QString::number(val, 'f', 3) + unit, 18)
 
-void Profiler::toStream(const QString &title, QTextStream &stream, const QList<FuncTimer*> &list, int _count) const
+void Profiler::Printer::dataToStream(QTextStream &stream, const QString &title, const QList<Data::Func> &funcs, int _count) const
 {
     stream << title << "\n";
     stream << FORMAT("Function", 60) << TITLE("Call time") << TITLE("Call count") << TITLE("Sum time") << "\n";
-    
-    int count = list.count() < _count ? list.count() : _count;
+    int count = funcs.count() < _count ? funcs.count() : _count;
     for (int i = 0; i < count; ++i) {
-        const FuncTimer *info = list.at(i);
-        stream << FORMAT(info->func, 60) << VALUE_D(info->callcount ? (info->sumtime / info->callcount) : 0, " ms") << VALUE(info->callcount, "") << VALUE_D(info->sumtime, " ms") << "\n";
+        const Data::Func &f = funcs.at(i);
+        stream << FORMAT(f.func, 60) << VALUE_D(f.calltime, " ms") << VALUE(f.callcount, "") << VALUE_D(f.sumtime, " ms") << "\n";
     }
     stream << "\n\n";
-}
-
-QString Profiler::prepare(const QString &title, QList<Profiler::FuncTimer *> &list) const
-{
-    QString str;
-    QTextStream stream(&str);
-    stream << "\n\n";
-    
-    qSort(list.begin(), list.end(), Profiler::isLessBySum);
-    toStream(title + QString("Top 150 by sum time (total count: %1").arg(list.count()), stream, list, 150);
-    
-    return str;
 }

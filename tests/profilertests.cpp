@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 #include "qzebradev/profiler.h"
 #include "qzebradev/profilerlogprinter.h"
+#include "qzebradev/logger.h"
 
 #include "overhead.h"
 
@@ -8,14 +9,13 @@ using namespace QZebraDev;
 
 class ProfilerTests : public ::testing::Test
 {
-    protected:
+protected:
 
     ProfilerTests()
     {
         Profiler::instance()->setup(Profiler::Options(), new ProfilerLogPrinter());
+        Logger::instance()->setLevel(Logger::Debug);
     }
-
-
 };
 
 TEST_F(ProfilerTests, Example)
@@ -34,7 +34,7 @@ TEST_F(ProfilerTests, Example)
 
     example.func();
 
-    Profiler::instance()->printMain();
+    Profiler::instance()->printThreadsData();
 }
 
 TEST_F(ProfilerTests, Overhead)

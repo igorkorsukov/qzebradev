@@ -56,9 +56,40 @@ public:
         bool longFuncDetectorEnabled;
         int longFuncThreshold;
 
+        int dataTopCount;
+
         Options() : stepTimeEnabled(true),
             funcsTimeEnabled(true), funcsTraceEnabled(false), funcsMaxThreadCount(100),
-            longFuncDetectorEnabled(true), longFuncThreshold(3000) {}
+            longFuncDetectorEnabled(true), longFuncThreshold(3000),
+            dataTopCount(150){}
+    };
+
+    struct Data {
+
+        enum Mode {
+            All,
+            OnlyMain,
+            OnlyOther
+        };
+
+        struct Func {
+            QString func;
+            uint callcount;
+            double calltime;    // ms
+            double sumtime;     // ms
+            Func(const QString& f, uint cc, double ct, double st)
+                : func(f), callcount(cc), calltime(ct), sumtime(st){}
+        };
+
+        struct Thread {
+            quintptr thread;
+            QList<Func> funcs;
+            Thread() : thread(0) {}
+        };
+
+        quintptr mainThread;
+        QHash<quintptr, Thread> threads;
+        Data() : mainThread(0){}
     };
 
     struct Printer {
@@ -68,6 +99,9 @@ public:
         virtual void printStep(qint64 beginMs, qint64 stepMs, const QString &info);
         virtual void printTrace(const QString& func, qint64 calltime, qint64 callcount, double sumtime);
         virtual void printLongFuncs(const QStringList &funcsStack);
+        virtual void printData(const Data &data, Data::Mode mode, int maxcount);
+        virtual QString formatData(const Data &data, Data::Mode mode, int maxcount) const;
+        virtual void dataToStream(QTextStream &stream, const QString &title, const QList<Data::Func> &funcs, int count) const;
     };
 
     void setup(const Options &opt = Options(), Printer *printer = 0);
@@ -85,14 +119,10 @@ public:
     
     void clear();
 
-    QString mainString();
-    QString threadsString();
+    Data threadsData(Data::Mode mode = Data::All) const;
 
-    void printMain();
-    void printThreads();
-    
-    typedef QList<QVariantMap> Data;
-    Data mainData() const;
+    QString threadsDataString(Data::Mode mode = Data::All) const;
+    void printThreadsData(Data::Mode mode = Data::All) const;
     
 private slots:
     void th_checkLongFuncs();
@@ -125,8 +155,8 @@ private:
         const QString& func;
         QElapsedTimer timer;
         uint callcount;
-        qint64 calltime;
-        double sumtime;
+        qint64 calltime;    // ns
+        double sumtime;     // ms
         explicit FuncTimer(const QString &f) : func(f), callcount(0), calltime(0), sumtime(0) {}
     };
 
@@ -154,11 +184,6 @@ private:
         void lockIfNeed(int index);
         void unlockIfNeed(int index);
     };
-    
-    static bool isLessBySum(const Profiler::FuncTimer* f, const Profiler::FuncTimer* s);
-    
-    QString prepare(const QString &title, QList<FuncTimer*> &list) const;
-    void toStream(const QString &title, QTextStream &stream, const QList<FuncTimer*> &list, int count) const;
 
     static Options m_options;
     Printer *m_printer;
