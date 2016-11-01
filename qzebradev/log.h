@@ -1,5 +1,5 @@
-#ifndef LOG_H
-#define LOG_H
+#ifndef QZebraDev_LOG_H
+#define QZebraDev_LOG_H
 
 #include <QCoreApplication>
 #include <QString>
@@ -16,24 +16,18 @@
 
 //! Log
 
-static const QString LOG_ERROR("ERROR");
-static const QString LOG_WARN("WARN");
-static const QString LOG_INFO("INFO");
-static const QString LOG_DEBUG("DEBUG");
-
-static const QString LOG_TIME_NAME = "TIME";
-static const QString LOG_TRACE_NAME = "TRACE";
-
 #ifndef LOG_TAG
 #define LOG_TAG CLASSNAME(Q_FUNC_INFO)
 #endif
 
-#define IF_LOGLEVEL(_level)  if(_level <= QZebraDev::Logger::instance()->level())
+#define IF_LOGLEVEL(level)  if(QZebraDev::Logger::instance()->isLevel(level))
 
-#define LOGE()      IF_LOGLEVEL(Logger::Normal) QZebraDev::LogStream(LOG_ERROR, LOG_TAG).stream() << FUNCNAME(Q_FUNC_INFO)
-#define LOGW()      IF_LOGLEVEL(Logger::Normal) QZebraDev::LogStream(LOG_WARN, LOG_TAG).stream() << FUNCNAME(Q_FUNC_INFO)
-#define LOGI()      IF_LOGLEVEL(Logger::Normal) QZebraDev::LogStream(LOG_INFO, LOG_TAG).stream() << FUNCNAME(Q_FUNC_INFO)
-#define LOGD()      IF_LOGLEVEL(Logger::Debug) QZebraDev::LogStream(LOG_DEBUG, LOG_TAG).stream() << FUNCNAME(Q_FUNC_INFO)
+#define LOG(type, tag)  QZebraDev::LogStream(type, tag).stream() << FUNCNAME(Q_FUNC_INFO)
+
+#define LOGE()      IF_LOGLEVEL(QZebraDev::Logger::Normal) LOG(QZebraDev::Logger::ERROR, LOG_TAG)
+#define LOGW()      IF_LOGLEVEL(QZebraDev::Logger::Normal) LOG(QZebraDev::Logger::WARN, LOG_TAG)
+#define LOGI()      IF_LOGLEVEL(QZebraDev::Logger::Normal) LOG(QZebraDev::Logger::INFO, LOG_TAG)
+#define LOGD()      IF_LOGLEVEL(QZebraDev::Logger::Debug) LOG(QZebraDev::Logger::DEBUG, LOG_TAG)
 
 //! Helps
 #define DEPRECATED LOGD() << "This function deprecated!!";
@@ -57,4 +51,4 @@ static const QString LOG_TRACE_NAME = "TRACE";
 #define CHECK_PARENT(obj) if (obj) { IF_ASSERT(obj->parent()) { LOGE() << "There should be set parent"; } }
 
 
-#endif // LOG_H
+#endif // QZebraDev_LOG_H

@@ -3,12 +3,15 @@
 
 using namespace QZebraDev;
 
-Logger *Logger::s_logger = 0;
 // Layout ---------------------------------
 #define PTRSTR(ptr) QString::fromLatin1("0x%1").arg(reinterpret_cast<quintptr>(ptr), QT_POINTER_SIZE*2, 16, QLatin1Char('0'))
 
-LogLayout::LogLayout(const QString &f)
-    : m_format(f)
+LogLayout::LogLayout(const QString &format)
+    : m_format(format)
+{
+}
+
+LogLayout::~LogLayout()
 {
 }
 
@@ -67,13 +70,16 @@ LogLayout LogDest::layout() const
 #include "logdefdest.h"
 
 // Logger ---------------------------------
+Logger *Logger::s_logger = 0;
+const QString Logger::ERROR("ERROR");
+const QString Logger::WARN("WARN");
+const QString Logger::INFO("INFO");
+const QString Logger::DEBUG("DEBUG");
+
 Logger::Logger()
     : m_level(Normal)
 {
-    m_types << "ERROR" << "WARN" << "INFO";
-    addLogDest(new ConsoleLogDest(LogLayout("${time} | ${type} | ${tag} | ${thread} | ${message}")));
-
-    setIsCatchQtMsg(true);
+    setupDefault();
 }
 
 Logger::~Logger()
@@ -83,70 +89,23 @@ Logger::~Logger()
     clearLogDest();
 }
 
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
-void Logger::logMsgHandler(QtMsgType type, const QMessageLogContext &context, const QString &s)
+void Logger::setupDefault()
 {
-    Q_UNUSED(context);
-#else
-void Logger::logMsgHandler(enum QtMsgType type, const char *s)
-{
-#endif
-    if (type == QtDebugMsg && Logger::instance()->level() <= Logger::Normal)
-        return;
+    clearLogDest();
+    addLogDest(new ConsoleLogDest(LogLayout("${time} | ${type} | ${tag} | ${thread} | ${message}")));
 
-    QString str(s);
-    LogMsg logMsg(qtMsgTypeToString(type), "Qt", str);
-    QChar smb;
-    QChar lsmb;
-    int linx = 0;
-    int count = str.length();
-    int endi = count - 1;
-    for (int i = 0; i < str.length(); ++i) {
-        if ((str.at(i) == '|' && i > 0) || i == endi) {
-            smb = str.at(i - 1);
-            if (i == endi) smb = '0';
-            switch (smb.toLatin1()) {
-            case 'L':
-            case 'T':
-            case 'C':
-            case 'S':
-            case '0': {
-                if (!lsmb.isNull()) {
-                    QString pstr = str.mid(linx + 1, i - linx - 2);
-                    switch (lsmb.toLatin1()) {
-                    case 'L': logMsg.type = pstr.trimmed(); break;
-                    case 'T': logMsg.tag = pstr.trimmed(); break;
-                    case 'S': logMsg.message = pstr; break;
-                    default: break;
-                    }
-                }
-                linx = i;
-                lsmb = smb;
-            } break;
-            default:
-                break;
-            }
-        }
-    }
+    m_level = Normal;
 
-    Logger::instance()->write(logMsg);
-}
+    m_types.clear();
+    m_types << ERROR << WARN << INFO << DEBUG;
 
-QString Logger::qtMsgTypeToString(enum QtMsgType defType)
-{
-    switch (defType) {
-    case QtDebugMsg: return "DEBUG";
-    case QtWarningMsg: return"WARN";
-    case QtCriticalMsg: return"ERROR";
-    case QtFatalMsg: return "FATAL";
-    default: return "INFO";
-    }
+    setIsCatchQtMsg(true);
 }
 
 void Logger::write(const LogMsg &logMsg)
 {
     QMutexLocker locker(&m_mutex);
-    if ((m_level == Full || m_types.contains(logMsg.type))){
+    if ((m_level == Full || m_level == Normal || isType(logMsg.type))){
         foreach (LogDest *dest, m_destList) {
             dest->write(logMsg);
         }
@@ -170,6 +129,11 @@ void Logger::setLevel(const Level level)
     m_level = level;
 }
 
+Logger::Level Logger::level() const
+{
+    return m_level;
+}
+
 QStringList Logger::typeList() const
 {
     return m_types.toList();
@@ -183,6 +147,35 @@ void Logger::setType(const QString &type, bool enb)
         }
     } else {
         m_types.remove(type);
+    }
+}
+
+
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
+void Logger::logMsgHandler(QtMsgType type, const QMessageLogContext &context, const QString &s)
+{
+    Q_UNUSED(context);
+#else
+void Logger::logMsgHandler(enum QtMsgType type, const char *s)
+{
+#endif
+    if (type == QtDebugMsg && !Logger::instance()->isLevel(Logger::Debug)) {
+        return;
+    }
+
+    LogMsg logMsg(qtMsgTypeToString(type), "Qt", QString(s));
+
+    Logger::instance()->write(logMsg);
+}
+
+QString Logger::qtMsgTypeToString(enum QtMsgType defType)
+{
+    switch (defType) {
+    case QtDebugMsg: return DEBUG;
+    case QtWarningMsg: return WARN;
+    case QtCriticalMsg: return ERROR;
+    case QtFatalMsg: return ERROR;
+    default: return INFO;
     }
 }
 

@@ -1,5 +1,5 @@
-#ifndef HELPFUL_H
-#define HELPFUL_H
+#ifndef QZebraDev_HELPFUL_H
+#define QZebraDev_HELPFUL_H
 
 #include <QString>
 
@@ -12,4 +12,4 @@ struct Helpful {
 
 }
 
-#endif // HELPFUL_H
+#endif // QZebraDev_HELPFUL_H

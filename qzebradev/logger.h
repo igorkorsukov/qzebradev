@@ -1,5 +1,5 @@
-#ifndef ZEBRA_LOGGER_H
-#define ZEBRA_LOGGER_H
+#ifndef QZebraDev_LOGGER_H
+#define QZebraDev_LOGGER_H
 
 #include <QDebug>
 #include <QVector>
@@ -35,8 +35,10 @@ public:
 class LogLayout
 {
 public:
-    explicit LogLayout(const QString &f);
-    QString output(const LogMsg &logMsg) const;
+    explicit LogLayout(const QString &format);
+    virtual ~LogLayout();
+
+    virtual QString output(const LogMsg &logMsg) const;
 
 private:
     QString m_format;
@@ -71,24 +73,31 @@ public:
         return s_logger;
     }
     
-    void write(const LogMsg &logMsg);
-    
     enum Level {
         Off     = 0,
         Normal  = 1,
         Debug   = 2,
         Full    = 3
     };
+
+    static const QString ERROR;
+    static const QString WARN;
+    static const QString INFO;
+    static const QString DEBUG;
+
+    void setupDefault();
     
-    void setLevel(const Level level);
-    inline Level level() const { return m_level; }
+    void setLevel(Level level);
+    Level level() const;
+    inline bool isLevel(Level level) const { return level <= m_level && level != Off; }
     
     QStringList typeList() const;
     void setType(const QString &type, bool enb);
-
     inline bool isType(const QString &type) const { return m_types.contains(type); }
 
     static void setIsCatchQtMsg(bool arg);
+
+    void write(const LogMsg &logMsg);
     
     void addLogDest(LogDest *dest);
     void clearLogDest();
@@ -137,4 +146,4 @@ private:
 
 }
 
-#endif // ZEBRA_LOGGER_H
+#endif // QZebraDev_LOGGER_H
