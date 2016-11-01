@@ -37,7 +37,7 @@ TEST_F(ProfilerTests, Example)
     Profiler::instance()->printThreadsData();
 }
 
-TEST_F(ProfilerTests, Overhead)
+TEST_F(ProfilerTests, DISABLED_Overhead)
 {
     struct Funcs : public Overhead::Funcs {
         void func() {
