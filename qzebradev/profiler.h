@@ -101,7 +101,7 @@ public:
         virtual void printLongFuncs(const QStringList &funcsStack);
         virtual void printData(const Data &data, Data::Mode mode, int maxcount);
         virtual QString formatData(const Data &data, Data::Mode mode, int maxcount) const;
-        virtual void dataToStream(QTextStream &stream, const QString &title, const QList<Data::Func> &funcs, int count) const;
+        virtual void funcsToStream(QTextStream &stream, const QString &title, const QList<Data::Func> &funcs, int count) const;
     };
 
     void setup(const Options &opt = Options(), Printer *printer = 0);

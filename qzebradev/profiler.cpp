@@ -70,6 +70,7 @@ void Profiler::setup(const Options &opt, Printer *printer)
     }
 
     if (printer) {
+        delete m_printer;
         m_printer = printer;
     }
 }
@@ -132,18 +133,16 @@ void Profiler::endFunc(const QString &func, quintptr th)
     
     FuncTimer *timer = m_funcs.timers[index].value(&func, NULL);
     if (timer) {
-        if (!timer->timer.isValid()) {
-            //! NOTE Вероятно рекурсивный вызов
-            return;
-        }
+        if (timer->timer.isValid()) { //! NOTE If not valid then it is probably a recursive call
 
-        timer->callcount++;
-        timer->calltime = timer->timer.nsecsElapsed();
-        timer->sumtime += timer->calltime * 0.0000001;
-        timer->timer.invalidate();
-        
-        if (m_options.funcsTraceEnabled) {
-            printer()->printTrace(func, timer->calltime, timer->callcount, timer->sumtime);
+            timer->callcount++;
+            timer->calltime = timer->timer.nsecsElapsed();
+            timer->sumtime += timer->calltime * 0.0000001; //! NOTE To millisecond
+            timer->timer.invalidate();
+
+            if (m_options.funcsTraceEnabled) {
+                printer()->printTrace(func, timer->calltime, timer->callcount, timer->sumtime);
+            }
         }
     }
 
@@ -253,7 +252,7 @@ Profiler::Data Profiler::threadsData(Data::Mode mode) const
             Data::Func f(
                         ft->func,
                         ft->callcount,
-                        (ft->callcount ? (ft->sumtime / static_cast<double>(ft->callcount)) : 0),
+                        ft->callcount ? (ft->sumtime / static_cast<double>(ft->callcount)) : 0,
                         ft->sumtime
                         );
 
@@ -304,7 +303,14 @@ void Profiler::LongFuncDetector::unlockIfNeed(int index)
     }
 }
 
-//! NOTE вызывается по таймауту таймера, который живет в другом потоке
+struct IsLessByTime {
+    bool operator()(const QPair<quint64, QString> &f, const QPair<quint64, QString> &s)
+    {
+        return f.first > s.first;
+    }
+};
+
+//! NOTE Сalled timeout timer, which is in background thread
 void Profiler::th_checkLongFuncs()
 {
     QList< QPair<quint64, QString> > longFuncs;
@@ -312,19 +318,19 @@ void Profiler::th_checkLongFuncs()
     { // находим незавершенные зависшие функции
 
         m_detector.needLock = true;
-        Sleep::msleep(10); //! NOTE Подождём, чтобы вышли потоки исполнения из beginFunc и endFunc
+        Sleep::msleep(10); //! NOTE Let's wait to come out of the thread of execution beginFunc and endFunc
 
         QMutexLocker locker(&m_detector.mutex);
         foreach (const FuncTimer *f, m_funcs.timers[MAIN_THREAD_INDEX]) {
             if (f->timer.isValid() && f->timer.elapsed() > m_options.longFuncThreshold) {
                 const qint64 t = f->timer.nsecsElapsed();
-                longFuncs.append(QPair<qint64, QString>(t, QString("%1: %2 sec").arg(f->func).arg(t / 1000000000.0)));
+                longFuncs.append(QPair<qint64, QString>(t, QString("%1: %2 ms").arg(f->func).arg(t * 0.0000001)));
             }
         }
     }
 
     m_detector.needLock = false;
-    qSort(longFuncs); //! NOTE сортируем по времени, в результате получим порядок стека главного потока
+    std::sort(longFuncs.begin(), longFuncs.end(), IsLessByTime()); //! NOTE Sorting by time, as a result we obtain a stack of the main thread
 
     QStringList funcs;
     for (int i = 0; i < longFuncs.count(); ++i) {
@@ -406,17 +412,17 @@ void Profiler::Printer::printLongFuncs(const QStringList &funcsStack)
     printInfo(str);
 }
 
+void Profiler::Printer::printData(const Data &data, Data::Mode mode, int maxcount)
+{
+    printInfo(formatData(data, mode, maxcount));
+}
+
 struct IsLessBySum {
     bool operator()(const Profiler::Data::Func &f, const Profiler::Data::Func &s)
     {
         return f.sumtime > s.sumtime;
     }
 };
-
-void Profiler::Printer::printData(const Data &data, Data::Mode mode, int maxcount)
-{
-    printInfo(formatData(data, mode, maxcount));
-}
 
 QString Profiler::Printer::formatData(const Data &data, Data::Mode mode, int maxcount) const
 {
@@ -428,7 +434,7 @@ QString Profiler::Printer::formatData(const Data &data, Data::Mode mode, int max
 
         Data::Thread thdata = data.threads[data.mainThread];
         std::sort(thdata.funcs.begin(), thdata.funcs.end(), IsLessBySum());
-        dataToStream(stream, QString("Main thread. Top %1 by sum time (total count: %2)").arg(maxcount).arg(thdata.funcs.count()), thdata.funcs, maxcount);
+        funcsToStream(stream, QString("Main thread. Top %1 by sum time (total count: %2)").arg(maxcount).arg(thdata.funcs.count()), thdata.funcs, maxcount);
     }
 
     if (mode == Data::OnlyOther || mode == Data::All) {
@@ -436,18 +442,16 @@ QString Profiler::Printer::formatData(const Data &data, Data::Mode mode, int max
         QList<Data::Func> funcs;
         QHash<quintptr, Data::Thread>::ConstIterator it = data.threads.constBegin(), end = data.threads.constEnd();
         while (it != end) {
-            if (it.key() == data.mainThread) {
-                ++it;
-                continue;
-            }
 
-            funcs << it.value().funcs;
+            if (it.key() != data.mainThread) {
+                funcs << it.value().funcs;
+            }
 
             ++it;
         }
 
         std::sort(funcs.begin(), funcs.end(), IsLessBySum());
-        dataToStream(stream, QString("Other threads. Top %1 by sum time (total count: %2)").arg(maxcount).arg(funcs.count()), funcs, maxcount);
+        funcsToStream(stream, QString("Other threads. Top %1 by sum time (total count: %2)").arg(maxcount).arg(funcs.count()), funcs, maxcount);
     }
 
     return str;
@@ -458,7 +462,7 @@ QString Profiler::Printer::formatData(const Data &data, Data::Mode mode, int max
 #define VALUE(val, unit) FORMAT(QString::number(val) + unit, 18)
 #define VALUE_D(val, unit) FORMAT(QString::number(val, 'f', 3) + unit, 18)
 
-void Profiler::Printer::dataToStream(QTextStream &stream, const QString &title, const QList<Data::Func> &funcs, int _count) const
+void Profiler::Printer::funcsToStream(QTextStream &stream, const QString &title, const QList<Data::Func> &funcs, int _count) const
 {
     stream << title << "\n";
     stream << FORMAT("Function", 60) << TITLE("Call time") << TITLE("Call count") << TITLE("Sum time") << "\n";
