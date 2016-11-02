@@ -15,7 +15,7 @@
 #endif
 
 #ifndef BEGIN_STEP_TIME
-#define BEGIN_STEP_TIME(tag) if (Profiler::options().stepTimeEnabled) { Profiler::instance()->stepTime(tag, QString("------------ Start %1 -----------").arg(tag), true); }
+#define BEGIN_STEP_TIME(tag) if (Profiler::options().stepTimeEnabled) { Profiler::instance()->stepTime(tag, QString("--- Begin %1 ---").arg(tag), true); }
 #endif
 
 #ifndef TRACEFUNC
@@ -97,8 +97,9 @@ public:
         virtual void printDebug(const QString &str);
         virtual void printInfo(const QString &str);
         virtual void printStep(qint64 beginMs, qint64 stepMs, const QString &info);
-        virtual void printTrace(const QString& func, qint64 calltime, qint64 callcount, double sumtime);
+        virtual void printTrace(const QString& func, double calltimeMs, qint64 callcount, double sumtimeMs);
         virtual void printLongFuncs(const QStringList &funcsStack);
+        virtual void printEndLongFunc(const QString &func, double calltimeMs);
         virtual void printData(const Data &data, Data::Mode mode, int maxcount);
         virtual QString formatData(const Data &data, Data::Mode mode, int maxcount) const;
         virtual void funcsToStream(QTextStream &stream, const QString &title, const QList<Data::Func> &funcs, int count) const;
@@ -124,6 +125,10 @@ public:
     QString threadsDataString(Data::Mode mode = Data::All) const;
     void printThreadsData(Data::Mode mode = Data::All) const;
     
+signals:
+    void detectorStarted(int ms);
+    void detectorStoped();
+
 private slots:
     void th_checkLongFuncs();
     
@@ -155,9 +160,9 @@ private:
         const QString& func;
         QElapsedTimer timer;
         uint callcount;
-        qint64 calltime;    // ns
-        double sumtime;     // ms
-        explicit FuncTimer(const QString &f) : func(f), callcount(0), calltime(0), sumtime(0) {}
+        double calltimeMs;
+        double sumtimeMs;
+        explicit FuncTimer(const QString &f) : func(f), callcount(0), calltimeMs(0), sumtimeMs(0) {}
     };
 
     typedef QHash<const QString*, FuncTimer* > FuncTimers;

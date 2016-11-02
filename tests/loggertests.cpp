@@ -9,12 +9,6 @@ using namespace QZebraDev;
 
 class LoggerTests : public ::testing::Test
 {
-protected:
-
-    LoggerTests()
-    {
-    }
-
 
 };
 
@@ -22,7 +16,7 @@ TEST_F(LoggerTests, Example)
 {
     Logger::instance()->setupDefault();
 
-    //! Default output to console, catch Qt message
+    //! Default output to console, catch Qt messages
 
     LOGE() << "This is error";
     LOGW() << "This is warning";
@@ -44,7 +38,7 @@ TEST_F(LoggerTests, Example)
     //! Set tag (default class name)
 
 #undef LOG_TAG
-#define LOG_TAG "MYTAG"
+#define LOG_TAG QStringLiteral("MYTAG")
 
     LOGI() << "This is info with tag";
     /*
@@ -63,12 +57,18 @@ TEST_F(LoggerTests, Example)
     */
 
 
-    //! Setup logger
+    //! --- Setup logger ---
     Logger *logger = Logger::instance();
 
     //! Destination and format
     logger->clearLogDest();
+
+    //! Console
     logger->addLogDest(new ConsoleLogDest(LogLayout("${time} | ${type} | ${tag} | ${thread} | ${message}")));
+
+    //! File,this creates a file named "apppath/logs/myapp-yyMMdd.log"
+    QString logPath = qApp->applicationDirPath() + "/logs";
+    logger->addLogDest(new FileLogDest(logPath, "myapp", "log", LogLayout("${longdate} | ${type} | ${tag} | ${thread} | ${message}")));
 
     /** NOTE Layout have a tags
     "${longdate}" - yyyy-MM-ddThh:mm:ss.zzz
@@ -80,9 +80,6 @@ TEST_F(LoggerTests, Example)
     "${trimmessage}" - trimmed message
       */
 
-    //! NOTE This creates a file named "apppath/logs/myapp-yyMMdd.log"
-    QString logPath = qApp->applicationDirPath() + "/logs";
-    logger->addLogDest(new FileLogDest(logPath, "myapp", "log", LogLayout("${longdate} | ${type} | ${tag} | ${thread} | ${message}")));
 
     //! Level
     logger->setLevel(Logger::Debug);
@@ -97,9 +94,10 @@ TEST_F(LoggerTests, Example)
 #define LOGSQLTRACE() IF_LOGLEVEL(QZebraDev::Logger::Debug) LOG("SQLTRACE", LOG_TAG)
 
     LOGSQLTRACE() << "This sql trace";
-/*
-21:53:05.601 | SQLTRACE | MYTAG                      | main | TestBody() This sql trace
-*/
+
+    /*
+    21:53:05.601 | SQLTRACE | MYTAG                      | main | TestBody() This sql trace
+    */
 
     //! That type does not output
     logger->setType("SQLTRACE", false); //! NOTE Type must be a debug level
