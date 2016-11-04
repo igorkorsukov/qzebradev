@@ -38,10 +38,29 @@ public:
     explicit LogLayout(const QString &format);
     virtual ~LogLayout();
 
+    struct Pattern {
+        QString pattern;
+        QString beforeStr;
+        int index;
+        int count;
+        int leftJustified;
+        Pattern() : index(-1), count(0), leftJustified(0) {}
+    };
+
     virtual QString output(const LogMsg &logMsg) const;
+
+    virtual QString formatPattern(const LogMsg &logMsg, const Pattern &p) const;
+    virtual QString formatDateTime(const QDateTime &dt) const;
+    virtual QString formatDate(const QDate &dt) const;
+    virtual QString formatTime(const QTime &dt) const;
+
+
+    static Pattern parcePattern(const QString &format, const QString &pattern);
+    static QList<Pattern> patterns(const QString &format);
 
 private:
     QString m_format;
+    QList<Pattern> m_patterns;
 };
 
 //! Destination ----------------------------

@@ -68,15 +68,15 @@ TEST_F(LoggerTests, Example)
 
     //! File,this creates a file named "apppath/logs/myapp-yyMMdd.log"
     QString logPath = qApp->applicationDirPath() + "/logs";
-    logger->addLogDest(new FileLogDest(logPath, "myapp", "log", LogLayout("${longdate} | ${type} | ${tag} | ${thread} | ${message}")));
+    logger->addLogDest(new FileLogDest(logPath, "myapp", "log", LogLayout("${datetime} | ${type} | ${tag} | ${thread} | ${message}")));
 
     /** NOTE Layout have a tags
-    "${longdate}" - yyyy-MM-ddThh:mm:ss.zzz
-    "${time}" - hh:mm:ss.zzz
-    "${type}" - type
-    "${tag}" - tag
-    "${thread}" - thread, the main thread output as "main" otherwise hex
-    "${message}" - message
+    "${datetime}"   - yyyy-MM-ddThh:mm:ss.zzz
+    "${time}"       - hh:mm:ss.zzz
+    "${type}"       - type
+    "${tag}"        - tag
+    "${thread}"     - thread, the main thread output as "main" otherwise hex
+    "${message}"    - message
     "${trimmessage}" - trimmed message
       */
 
@@ -110,7 +110,104 @@ TEST_F(LoggerTests, Example)
     //! Custom log macro - see log.h
 }
 
-struct OverheadFuncs : public Overhead::Funcs {
+TEST_F(LoggerTests, LogLayout_FormatTime)
+{
+    LogLayout l("");
+
+    QTime time(11, 47, 3, 34);
+
+    EXPECT_EQ(l.formatTime(time), "11:47:03.034");
+}
+
+TEST_F(LoggerTests, LogLayout_FormatDate)
+{
+    LogLayout l("");
+
+    QDate date(2016, 11, 4);
+
+    EXPECT_EQ(l.formatDate(date), "2016-11-04");
+}
+
+TEST_F(LoggerTests, LogLayout_FormatDateTime)
+{
+    LogLayout l("");
+
+    QDateTime dt(QDate(2016, 11, 4), QTime(12, 2, 32, 345));
+
+    EXPECT_EQ(l.formatDateTime(dt), "2016-11-04T12:02:32.345");
+}
+
+TEST_F(LoggerTests, LogLayout_ParcePattern)
+{
+    QString format("| ${type} | ${tag|26} ");
+
+    LogLayout::Pattern p = LogLayout::parcePattern(format, "${type}");
+    EXPECT_EQ(p.index, 2);
+    EXPECT_EQ(p.count, 7);
+    EXPECT_EQ(p.leftJustified, 0);
+    EXPECT_EQ(p.beforeStr.toStdString(), "| ");
+
+    p = LogLayout::parcePattern(format, "${tag}");
+    EXPECT_EQ(p.index, 12);
+    EXPECT_EQ(p.count, 9);
+    EXPECT_EQ(p.leftJustified, 26);
+    EXPECT_EQ(p.beforeStr.toStdString(), " | ");
+
+
+    p = LogLayout::parcePattern(format, "${datetime}");
+    EXPECT_EQ(p.index, -1);
+    EXPECT_EQ(p.count, 0);
+    EXPECT_EQ(p.leftJustified, 0);
+    EXPECT_EQ(p.beforeStr.toStdString(), "");
+}
+
+TEST_F(LoggerTests, LogLayout_Patterns)
+{
+    QString format("${datetime} | ${type|5} | ${tag|26} | ${thread} | ${message}");
+
+    QList<LogLayout::Pattern> patterns = LogLayout::patterns(format);
+    ASSERT_EQ(patterns.count(), 5);
+    EXPECT_EQ(patterns.at(0).pattern.toStdString(), "${datetime}");
+    EXPECT_EQ(patterns.at(1).pattern.toStdString(), "${type}");
+    EXPECT_EQ(patterns.at(2).pattern.toStdString(), "${tag}");
+    EXPECT_EQ(patterns.at(3).pattern.toStdString(), "${thread}");
+    EXPECT_EQ(patterns.at(4).pattern.toStdString(), "${message}");
+}
+
+TEST_F(LoggerTests, LogLayout_FormatOutput)
+{
+    LogLayout l("${datetime} | ${type|5} | ${tag|26} | ${thread} | ${message}");
+
+    LogMsg msg("WARN", "MyTag", "LogLayout_FormatOutput");
+    msg.dateTime = QDateTime(QDate(2016, 11, 4), QTime(12, 2, 32, 345));
+
+    EXPECT_EQ(l.output(msg).toStdString(), "2016-11-04T12:02:32.345 | WARN  | MyTag                      | main | LogLayout_FormatOutput");
+}
+
+struct LogLayoutBench : public Overhead::BenchFunc {
+
+    LogLayout l;
+    LogMsg msg;
+
+    void func() {
+        QString str = l.output(msg);
+        Q_UNUSED(str);
+    }
+
+    LogLayoutBench(const LogLayout &_l, const LogMsg _m)
+        : l(_l), msg(_m) {}
+
+};
+
+TEST_F(LoggerTests, LogLayout_Benchmark)
+{
+
+    LogLayoutBench b(LogLayout("${datetime} | ${type|5} | ${tag|26} | ${thread} | ${message}"), LogMsg("WARN", "MyTag", "LogLayout_FormatOutput"));
+
+    Overhead::benchmarkWithPrint("LogLayout", &b, 10000);
+}
+
+struct OverheadFuncs : public Overhead::OverFuncs {
     QString func() {
         QString str;
         for (int i = 0; i < 50; ++i) {
@@ -137,11 +234,11 @@ TEST_F(LoggerTests, Overhead_Noop)
     Logger::instance()->setIsCatchQtMsg(false); //! NOTE For output overhead
     Logger::instance()->clearLogDest();
     Logger::instance()->addLogDest(new NoopLogDest(LogLayout("${time} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like console
-    Logger::instance()->addLogDest(new NoopLogDest(LogLayout("${longdate} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like file
+    Logger::instance()->addLogDest(new NoopLogDest(LogLayout("${datetime} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like file
 
     OverheadFuncs funcs;
 
-    Overhead::Result over = Overhead::overheadWithPrint("Logger", &funcs, 1000);
+    Overhead::OverResult over = Overhead::overheadWithPrint("Logger", &funcs, 1000);
 
     ASSERT_LT(over.overPercent, 25);
 }
@@ -152,11 +249,11 @@ TEST_F(LoggerTests, Overhead_NoDebug)
     Logger::instance()->setIsCatchQtMsg(false); //! NOTE For output overhead
     Logger::instance()->clearLogDest();
     Logger::instance()->addLogDest(new NoopLogDest(LogLayout("${time} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like console
-    Logger::instance()->addLogDest(new NoopLogDest(LogLayout("${longdate} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like file
+    Logger::instance()->addLogDest(new NoopLogDest(LogLayout("${datetime} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like file
 
     OverheadFuncs funcs;
 
-    Overhead::Result over = Overhead::overheadWithPrint("Logger", &funcs, 100000);
+    Overhead::OverResult over = Overhead::overheadWithPrint("Logger", &funcs, 100000);
 
     ASSERT_LT(over.overPercent, 0.5);
 }

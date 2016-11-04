@@ -7,24 +7,33 @@ class Overhead
 {
 public:
 
-    struct Funcs {
-        virtual void pureFunc() = 0;
-        virtual void overFunc() = 0;
-        virtual ~Funcs() {}
+    struct BenchFunc {
+        virtual void func() = 0;
+        virtual ~BenchFunc() {}
     };
 
-    struct Result {
+    static qint64 benchmark(BenchFunc *func, int callCount);
+    static qint64 benchmarkWithPrint(const QString &info, BenchFunc *func, int callCount);
+
+
+    struct OverFuncs {
+        virtual void pureFunc() = 0;
+        virtual void overFunc() = 0;
+        virtual ~OverFuncs() {}
+    };
+
+    struct OverResult {
         qint64 pureFuncTime;
         qint64 overFuncTime;
         qint64 overTime;
         double overPercent;
-        Result() : pureFuncTime(0), overFuncTime(0), overTime(0),
+        OverResult() : pureFuncTime(0), overFuncTime(0), overTime(0),
             overPercent(0.)
         {}
     };
 
-    static Result overhead(Funcs *funcs, int callCount);
-    static Result overheadWithPrint(const QString &info, Funcs *funcs, int callCount);
+    static OverResult overhead(OverFuncs *funcs, int callCount);
+    static OverResult overheadWithPrint(const QString &info, OverFuncs *funcs, int callCount);
 };
 
 #endif // BENCHMARK_H

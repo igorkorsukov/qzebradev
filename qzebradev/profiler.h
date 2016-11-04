@@ -61,7 +61,7 @@ public:
 
         Options() : stepTimeEnabled(true),
             funcsTimeEnabled(true), funcsTraceEnabled(false), funcsMaxThreadCount(100),
-            longFuncDetectorEnabled(true), longFuncThreshold(3000),
+            longFuncDetectorEnabled(true), longFuncThreshold(1000),
             dataTopCount(150){}
     };
 

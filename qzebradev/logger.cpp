@@ -4,21 +4,8 @@
 using namespace QZebraDev;
 
 // Layout ---------------------------------
-#define PTRSTR(ptr) QString::fromLatin1("0x%1").arg(reinterpret_cast<quintptr>(ptr), QT_POINTER_SIZE*2, 16, QLatin1Char('0'))
 
-LogLayout::LogLayout(const QString &format)
-    : m_format(format)
-{
-}
-
-LogLayout::~LogLayout()
-{
-}
-
-static const int LENGTHOFTYPE = 5;
-static const int LENGTHOFTAG = 26;
-
-static const QString LONGDATE_PATTERN("${longdate}");
+static const QString DATETIME_PATTERN("${datetime}");
 static const QString TIME_PATTERN("${time}");
 static const QString TYPE_PATTERN("${type}");
 static const QString TAG_PATTERN("${tag}");
@@ -26,32 +13,209 @@ static const QString THREAD_PATTERN("${thread}");
 static const QString MESSAGE_PATTERN("${message}");
 static const QString TRIMMESSAGE_PATTERN("${trimmessage}");
 
-static const QChar HYPEN('-');
+static const QChar ZERO('0');
 static const QChar COLON(':');
+static const QChar DOT('.');
+static const QChar HYPEN('-');
+static const QChar T('T');
 static const QChar SPACE(' ');
+
+static const QString MAIN("main");
+#define PTRSTR(ptr) QString::fromLatin1("0x%1").arg(reinterpret_cast<quintptr>(ptr), QT_POINTER_SIZE*2, 16, QLatin1Char('0'))
+
+LogLayout::LogLayout(const QString &format)
+    : m_format(format)
+{
+    m_patterns = patterns(format);
+}
+
+LogLayout::~LogLayout()
+{
+}
+
+struct IsLessByIndex {
+    bool operator () (const LogLayout::Pattern &f, const LogLayout::Pattern &s)
+    {
+        return f.index < s.index;
+    }
+};
+
+QList<LogLayout::Pattern> LogLayout::patterns(const QString &format)
+{
+    QStringList ps;
+    ps << DATETIME_PATTERN << TIME_PATTERN << TYPE_PATTERN
+       << TAG_PATTERN << THREAD_PATTERN << MESSAGE_PATTERN
+       << TRIMMESSAGE_PATTERN;
+
+    QList<LogLayout::Pattern> patterns;
+    foreach (const QString &pstr, ps) {
+        Pattern p = parcePattern(format, pstr);
+        if (p.index > -1) {
+            patterns << p;
+        }
+    }
+
+    std::sort(patterns.begin(), patterns.end(), IsLessByIndex());
+
+    return patterns;
+}
+
+LogLayout::Pattern LogLayout::parcePattern(const QString &format, const QString &pattern)
+{
+    Pattern p;
+    p.pattern = pattern;
+    QString beginPattern(pattern.left(pattern.count() - 1));
+    int beginPatternIndex = format.indexOf(beginPattern);
+    if (beginPatternIndex > -1) {
+        p.index = beginPatternIndex;
+        int last = beginPatternIndex + beginPattern.count();
+
+        int filterIndex = -1;
+        int endPatternIndex = -1;
+        while (1) {
+
+            if (!(last < format.count())) {
+                break;
+            }
+
+            QChar c = format.at(last);
+            if (c == '|') {
+
+                filterIndex = last;
+
+            } else if (c == '}') {
+
+                endPatternIndex = last;
+                break;
+            }
+
+            ++last;
+        }
+
+        if (filterIndex > -1) {
+            QString filter = format.mid(filterIndex + 1, endPatternIndex - filterIndex - 1);
+            p.leftJustified = filter.toInt();
+        }
+
+        p.count = endPatternIndex - beginPatternIndex + 1;
+
+        int beforeEndPatternIndex = 0;
+        int beforeBeginPatterIndex = format.lastIndexOf("${", p.index - 1);
+        if (beforeBeginPatterIndex > -1) {
+            beforeEndPatternIndex = format.indexOf('}', beforeBeginPatterIndex) + 1;
+        }
+
+        p.beforeStr = format.mid(beforeEndPatternIndex, p.index - beforeEndPatternIndex);
+    }
+
+    return p;
+}
 
 QString LogLayout::output(const LogMsg &logMsg) const
 {
-    QString str = m_format;
-    QDate date = logMsg.dateTime.date();
-    QTime time = logMsg.dateTime.time();
+    QString str;
+    str.reserve(100);
+    foreach (const Pattern &p, m_patterns) {
+        str.append(p.beforeStr).append(formatPattern(logMsg, p));
+    }
 
-    QString timeStr = QString::number(time.hour()) + COLON +
-            QString::number(time.minute()) + COLON +
-            QString::number(time.second()) + '.' +
-            QString::number(time.msec());
+    return str;
+}
 
-    QString dateStr = QString::number(date.year()) + HYPEN +
-            QString::number(date.month()) + HYPEN +
-            QString::number(date.day()) + 'T' + timeStr;
+QString LogLayout::formatPattern(const LogMsg &logMsg, const Pattern &p) const
+{
+    if (DATETIME_PATTERN == p.pattern) {
 
-    str.replace(LONGDATE_PATTERN, dateStr);
-    str.replace(TIME_PATTERN, timeStr);
-    str.replace(TYPE_PATTERN, logMsg.type.leftJustified(LENGTHOFTYPE, SPACE));
-    str.replace(TAG_PATTERN, logMsg.tag.trimmed().leftJustified(LENGTHOFTAG, SPACE));
-    str.replace(THREAD_PATTERN, (qApp && qApp->thread() == logMsg.thread) ? "main" : PTRSTR(logMsg.thread));
-    str.replace(MESSAGE_PATTERN, logMsg.message);
-    str.replace(TRIMMESSAGE_PATTERN, logMsg.message.simplified().remove(QChar('"')).replace("\\", "\\\\"));
+        return formatDateTime(logMsg.dateTime).leftJustified(p.leftJustified, SPACE);
+
+    } else if (TIME_PATTERN == p.pattern) {
+
+        return formatTime(logMsg.dateTime.time()).leftJustified(p.leftJustified, SPACE);
+
+    } else if (TYPE_PATTERN == p.pattern) {
+
+        return logMsg.type.leftJustified(p.leftJustified, SPACE);
+
+    } else if (TAG_PATTERN == p.pattern) {
+
+        return logMsg.tag.leftJustified(p.leftJustified, SPACE);
+
+    } else if (THREAD_PATTERN == p.pattern) {
+
+        return ((qApp && qApp->thread() == logMsg.thread) ? MAIN : PTRSTR(logMsg.thread)).leftJustified(p.leftJustified, SPACE);
+
+    } else if (MESSAGE_PATTERN == p.pattern) {
+
+        return logMsg.message.leftJustified(p.leftJustified, SPACE);
+
+    } else if (TRIMMESSAGE_PATTERN == p.pattern) {
+
+        return logMsg.message.simplified().remove(QChar('"')).replace("\\", "\\\\").leftJustified(p.leftJustified, SPACE);
+    }
+
+    return QString();
+}
+
+QString LogLayout::formatDateTime(const QDateTime &dt) const
+{
+    QString str;
+    str.reserve(22);
+    str
+            .append(formatDate(dt.date()))
+            .append(T)
+            .append(formatTime(dt.time()));
+
+    return str;
+}
+
+QString LogLayout::formatDate(const QDate &d) const
+{
+    QString str;
+    str.reserve(10);
+
+    str.append(QString::number(d.year())).append(HYPEN);
+
+    if (d.month() < 10) {
+        str.append(ZERO);
+    }
+    str.append(QString::number(d.month())).append(HYPEN);
+
+    if (d.day() < 10) {
+        str.append(ZERO);
+    }
+    str.append(QString::number(d.day()));
+
+    return str;
+}
+
+QString LogLayout::formatTime(const QTime &t) const
+{
+    QString str;
+    str.reserve(12);
+
+    if (t.hour() < 10) {
+        str.append(ZERO);
+    }
+    str.append(QString::number(t.hour())).append(COLON);
+
+    if (t.minute() < 10) {
+        str.append(ZERO);
+    }
+    str.append(QString::number(t.minute())).append(COLON);
+
+    if (t.second() < 10) {
+        str.append(ZERO);
+    }
+    str.append(QString::number(t.second())).append(DOT);
+
+    if (t.msec() < 100) {
+        str.append(ZERO);
+    }
+
+    if (t.msec() < 10) {
+        str.append(ZERO);
+    }
+    str.append(QString::number(t.msec()));
 
     return str;
 }

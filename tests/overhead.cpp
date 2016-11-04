@@ -2,9 +2,46 @@
 #include <QElapsedTimer>
 #include <QDebug>
 
-Overhead::Result Overhead::overhead(Funcs *funcs, int callCount)
+qint64 Overhead::benchmark(BenchFunc *func, int callCount)
 {
-    Result result;
+    qint64 retNs(0);
+
+    QElapsedTimer timer;
+    timer.start();
+
+    int measureCount = 25;
+
+    for (int i = 0; i < measureCount; ++i) {
+
+        qint64 startNs = timer.nsecsElapsed();
+        for (int i = 0; i < callCount; ++i) {
+            func->func();
+        }
+        qint64 endNs = timer.nsecsElapsed();
+
+        retNs += (endNs - startNs);
+    }
+
+    retNs = retNs / measureCount;
+
+    return retNs;
+}
+
+qint64 Overhead::benchmarkWithPrint(const QString &info, BenchFunc *func, int callCount)
+{
+    qDebug() << info << "- start measure benchmark";
+
+    qint64 retNs = benchmark(func, callCount);
+    double retMs = retNs * 0.000001;
+
+    qDebug() << info << "benchmark:" << QString::number(retMs, 'f', 3) << "ms on " << callCount;
+
+    return retNs;
+}
+
+Overhead::OverResult Overhead::overhead(OverFuncs *funcs, int callCount)
+{
+    OverResult result;
 
     QElapsedTimer timer;
     timer.start();
@@ -36,11 +73,11 @@ Overhead::Result Overhead::overhead(Funcs *funcs, int callCount)
     return result;
 }
 
-Overhead::Result Overhead::overheadWithPrint(const QString &info, Funcs *funcs, int callCount)
+Overhead::OverResult Overhead::overheadWithPrint(const QString &info, OverFuncs *funcs, int callCount)
 {
     qDebug() << info << "- start measure overhead";
 
-    Result over = overhead(funcs, callCount);
+    OverResult over = overhead(funcs, callCount);
 
     qDebug() << info << "pureFuncTime:" << over.pureFuncTime << "ms" << "overFuncTime:" << over.overFuncTime << "ms";
     qDebug() << info << "overhead:" << over.overTime << "ms on" << callCount << "calls OR" << over.overPercent << "%";

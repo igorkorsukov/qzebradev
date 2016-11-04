@@ -64,15 +64,15 @@ struct Example {
     void veryLongFunc()
     {
         TRACEFUNC;
-        longFunc(500);
+        longFunc(200);
         stackFunc();
     }
 
     void stackFunc()
     {
         TRACEFUNC;
-        longFunc(2000);
-        longFunc(2000);
+        longFunc(600);
+        longFunc(800);
     }
 
 };
@@ -104,10 +104,10 @@ TEST_F(ProfilerTests, Example)
     example.funcWithSteps();
 
     /*
-    10:15:40.131 | DEBUG | Profiler                   | main | Example : 0/0 ms: Begin
-    10:15:40.142 | DEBUG | Profiler                   | main | Example : 10/10 ms: end step 1
-    10:15:40.242 | DEBUG | Profiler                   | main | Example : 110/100 ms: end step 2
-    10:15:40.293 | DEBUG | Profiler                   | main | Example : 161/50 ms: end step 3
+    11:54:38.252 | DEBUG | Profiler                   | main | Example : 0.000/0.000 ms: Begin
+    11:54:38.263 | DEBUG | Profiler                   | main | Example : 10.230/10.101 ms: end step 1
+    11:54:38.363 | DEBUG | Profiler                   | main | Example : 110.847/100.177 ms: end step 2
+    11:54:38.414 | DEBUG | Profiler                   | main | Example : 161.880/50.263 ms: end step 3
     */
 
     //! Detected long functions
@@ -115,20 +115,18 @@ TEST_F(ProfilerTests, Example)
     example.veryLongFunc();
 
     /*
-    22:48:13.023 | INFO  | Profiler                   | 0x0103d658 | Long functions on main thread: //! NOTE Detected during functions execution
-    void Example::veryLongFunc(): 3470 ms
-    22:48:14.382 | INFO  | Profiler                   | 0x0103d658 | Long functions on main thread: //! NOTE Detected during functions execution, output stack
-    void Example::veryLongFunc(): 4828 ms
-    void Example::stackFunc(): 3828 ms
-    22:48:14.554 | INFO  | Profiler                   | main | Long: 4000.518 ms, func: void Example::stackFunc()
-    22:48:14.554 | INFO  | Profiler                   | main | Long: 5001.242 ms, func: void Example::veryLongFunc()
+    11:54:39.636 | INFO  | Profiler                   | 0x0078d650 | Long functions on main thread: //! NOTE Detected during functions execution, output stack
+    void Example::veryLongFunc(): 1221 ms
+    void Example::stackFunc(): 1021 ms
+    11:54:40.016 | INFO  | Profiler                   | main | Long: 1401.590 ms, func: void Example::stackFunc()
+    11:54:40.017 | INFO  | Profiler                   | main | Long: 1602.358 ms, func: void Example::veryLongFunc()
     */
 
 }
 
 TEST_F(ProfilerTests, DISABLED_Overhead)
 {
-    struct Funcs : public Overhead::Funcs {
+    struct Funcs : public Overhead::OverFuncs {
         void func() {
             QString str;
             str = "str";
@@ -147,7 +145,7 @@ TEST_F(ProfilerTests, DISABLED_Overhead)
 
     Funcs funcs;
 
-    Overhead::Result over = Overhead::overheadWithPrint("Profiler", &funcs, 1000000);
+    Overhead::OverResult over = Overhead::overheadWithPrint("Profiler", &funcs, 1000000);
 
     ASSERT_LT(over.overPercent, 110);
 }
