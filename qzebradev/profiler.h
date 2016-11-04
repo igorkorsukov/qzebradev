@@ -97,7 +97,7 @@ public:
         virtual ~Printer();
         virtual void printDebug(const QString &str);
         virtual void printInfo(const QString &str);
-        virtual void printStep(const QString &tag, qint64 beginMs, qint64 stepMs, const QString &info);
+        virtual void printStep(const QString &tag, double beginMs, double stepMs, const QString &info);
         virtual void printTrace(const QString& func, double calltimeMs, qint64 callcount, double sumtimeMs);
         virtual void printLongFuncs(const QStringList &funcsStack);
         virtual void printEndLongFunc(const QString &func, double calltimeMs);
@@ -145,11 +145,11 @@ private:
         QElapsedTimer beginTime;
         QElapsedTimer stepTime;
         
-        qint64 beginMs() const { return beginTime.elapsed(); }
-        qint64 stepMs() const { return stepTime.elapsed(); }
-        void start() { beginTime.start(); stepTime.start(); }
-        void restart() { beginTime.restart(); stepTime.restart(); }
-        void nextStep() { stepTime.restart(); }
+        double beginMs() const;
+        double stepMs() const;
+        void start();
+        void restart();
+        void nextStep();
     };
 
     struct StepsData {

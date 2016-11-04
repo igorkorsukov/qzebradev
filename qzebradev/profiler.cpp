@@ -179,6 +179,32 @@ const QString& Profiler::staticInfo(const QString &info)
     return m_funcs.staticInfo.last();
 }
 
+double Profiler::StepTimer::beginMs() const
+{
+    return this->beginTime.nsecsElapsed() * 0.000001; //! NOTE To millisecond
+}
+
+double Profiler::StepTimer::stepMs() const
+{
+    return this->stepTime.nsecsElapsed() * 0.000001; //! NOTE To millisecond
+}
+
+void Profiler::StepTimer::start()
+{
+    this->beginTime.start();
+    this->stepTime.start();
+}
+void Profiler::StepTimer::restart()
+{
+    this->beginTime.restart();
+    this->stepTime.restart();
+}
+
+void Profiler::StepTimer::nextStep()
+{
+   this-> stepTime.restart();
+}
+
 int Profiler::FuncsData::threadIndex(quintptr th) const
 {
     int count = this->threads.count();
@@ -384,10 +410,10 @@ void Profiler::Printer::printInfo(const QString &str)
     qDebug() << str;
 }
 
-void Profiler::Printer::printStep(const QString &tag, qint64 beginMs, qint64 stepMs, const QString &info)
+void Profiler::Printer::printStep(const QString &tag, double beginMs, double stepMs, const QString &info)
 {
     static const QString COLON(" : ");
-    static const QString SEP("/");
+    static const QChar SEP('/');
     static const QString MS(" ms: ");
 
     QString str;
@@ -396,9 +422,9 @@ void Profiler::Printer::printStep(const QString &tag, qint64 beginMs, qint64 ste
     str
             .append(tag)
             .append(COLON)
-            .append(QString::number(beginMs))
+            .append(QString::number(beginMs, 'f', 3))
             .append(SEP)
-            .append(QString::number(stepMs))
+            .append(QString::number(stepMs, 'f', 3))
             .append(MS)
             .append(info);
 
