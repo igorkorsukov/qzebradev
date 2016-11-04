@@ -48,10 +48,10 @@ struct Example {
         longFunc(10);
         STEP_TIME("Example", "end step 1");
 
-        longFunc(300);
+        longFunc(100);
         STEP_TIME("Example", "end step 2");
 
-        longFunc(100);
+        longFunc(50);
         STEP_TIME("Example", "end step 3");
     }
 
@@ -104,10 +104,10 @@ TEST_F(ProfilerTests, Example)
     example.funcWithSteps();
 
     /*
-    09:07:22.506 | DEBUG | Profiler                   | main | printDebug(const QString&) 0/0 ms: --- Begin Example ---
-    09:07:22.518 | DEBUG | Profiler                   | main | printDebug(const QString&) 10/10 ms: end step 1
-    09:07:23.018 | DEBUG | Profiler                   | main | printDebug(const QString&) 511/500 ms: end step 2
-    09:07:23.119 | DEBUG | Profiler                   | main | printDebug(const QString&) 612/100 ms: end step 3
+    10:15:40.131 | DEBUG | Profiler                   | main | Example : 0/0 ms: Begin
+    10:15:40.142 | DEBUG | Profiler                   | main | Example : 10/10 ms: end step 1
+    10:15:40.242 | DEBUG | Profiler                   | main | Example : 110/100 ms: end step 2
+    10:15:40.293 | DEBUG | Profiler                   | main | Example : 161/50 ms: end step 3
     */
 
     //! Detected long functions

@@ -13,7 +13,7 @@ struct Sleep : public QThread { using QThread::msleep; };
 #define MAIN_THREAD_INDEX 0
 
 Profiler::Profiler()
-    : m_printer(0)
+    : QObject(), m_printer(0)
 {
     connect(this, SIGNAL(detectorStarted(int)), &m_detector.timer, SLOT(start(int)), Qt::QueuedConnection);
     connect(this, SIGNAL(detectorStoped()), &m_detector.timer, SLOT(stop()), Qt::QueuedConnection);
@@ -29,6 +29,11 @@ Profiler::~Profiler()
     s_profiler = 0;
     delete m_printer;
 
+    if (m_detector.enabled) {
+        emit detectorStoped();
+        m_detector.thread.exit();
+    }
+
     {
         QMutexLocker locker(&m_funcs.mutex);
         for (int i = 0; i < m_funcs.threads.count(); ++i) {
@@ -38,6 +43,7 @@ Profiler::~Profiler()
 
             FuncTimers timers = m_funcs.timers[i];
             qDeleteAll(timers);
+            m_funcs.timers[i].clear();
 
             if (i == MAIN_THREAD_INDEX && m_detector.enabled) {
                 m_detector.mutex.unlock();
@@ -96,7 +102,7 @@ void Profiler::stepTime(const QString &tag, const QString &info, bool isRestart)
         stepTimer->start();
     }
 
-    printer()->printStep(stepTimer->beginMs(), stepTimer->stepMs(), info);
+    printer()->printStep(tag, stepTimer->beginMs(), stepTimer->stepMs(), info);
     
     stepTimer->nextStep();
 }
@@ -378,14 +384,18 @@ void Profiler::Printer::printInfo(const QString &str)
     qDebug() << str;
 }
 
-void Profiler::Printer::printStep(qint64 beginMs, qint64 stepMs, const QString &info)
+void Profiler::Printer::printStep(const QString &tag, qint64 beginMs, qint64 stepMs, const QString &info)
 {
+    static const QString COLON(" : ");
     static const QString SEP("/");
     static const QString MS(" ms: ");
 
     QString str;
     str.reserve(100);
+
     str
+            .append(tag)
+            .append(COLON)
             .append(QString::number(beginMs))
             .append(SEP)
             .append(QString::number(stepMs))

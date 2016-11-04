@@ -10,13 +10,14 @@
 #include <QThread>
 #include <QTimer>
 
+#ifndef BEGIN_STEP_TIME
+#define BEGIN_STEP_TIME(tag) if (Profiler::options().stepTimeEnabled) { Profiler::instance()->stepTime(tag, QString("Begin"), true); }
+#endif
+
 #ifndef STEP_TIME
 #define STEP_TIME(tag, info) if (Profiler::options().stepTimeEnabled) { Profiler::instance()->stepTime(tag, info); }
 #endif
 
-#ifndef BEGIN_STEP_TIME
-#define BEGIN_STEP_TIME(tag) if (Profiler::options().stepTimeEnabled) { Profiler::instance()->stepTime(tag, QString("--- Begin %1 ---").arg(tag), true); }
-#endif
 
 #ifndef TRACEFUNC
 #define TRACEFUNC \
@@ -96,7 +97,7 @@ public:
         virtual ~Printer();
         virtual void printDebug(const QString &str);
         virtual void printInfo(const QString &str);
-        virtual void printStep(qint64 beginMs, qint64 stepMs, const QString &info);
+        virtual void printStep(const QString &tag, qint64 beginMs, qint64 stepMs, const QString &info);
         virtual void printTrace(const QString& func, double calltimeMs, qint64 callcount, double sumtimeMs);
         virtual void printLongFuncs(const QStringList &funcsStack);
         virtual void printEndLongFunc(const QString &func, double calltimeMs);
