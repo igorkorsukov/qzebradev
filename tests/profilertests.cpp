@@ -3,6 +3,7 @@
 #include "qzebradev/profilerlogprinter.h"
 #include "qzebradev/logger.h"
 
+#include <QElapsedTimer>
 #include "overhead.h"
 
 using namespace QZebraDev;
@@ -17,7 +18,6 @@ protected:
     {
         Logger::instance()->setupDefault();
         Logger::instance()->setLevel(Logger::Debug);
-        Profiler::instance()->setup(Profiler::Options(), new ProfilerLogPrinter());
     }
 };
 
@@ -79,6 +79,9 @@ struct Example {
 
 TEST_F(ProfilerTests, Example)
 {
+
+    Profiler::instance()->setup(Profiler::Options(), new ProfilerLogPrinter());
+
     //! Measurement duration of functions
 
     Example example;
@@ -122,6 +125,65 @@ TEST_F(ProfilerTests, Example)
     11:54:40.017 | INFO  | Profiler                   | main | Long: 1602.358 ms, func: void Example::veryLongFunc()
     */
 
+}
+
+struct StepPrinterMock : public Profiler::Printer
+{
+    void printStep(const QString &_tag, double _beginMs, double _stepMs, const QString &_info)
+    {
+        tag = _tag;
+        beginMs = _beginMs;
+        stepMs = _stepMs;
+        info = _info;
+    }
+
+    QString tag;
+    double beginMs;
+    double stepMs;
+    QString info;
+};
+
+int roundMs(double ms)
+{
+    return static_cast<int>(ms);
+}
+
+TEST_F(ProfilerTests, Step)
+{
+    StepPrinterMock *printer = new StepPrinterMock();
+    Profiler::instance()->setup(Profiler::Options(), printer);
+
+    QElapsedTimer btimer;
+    QElapsedTimer stimer;
+
+    BEGIN_STEP_TIME("StepTest");
+    btimer.start();
+    stimer.start();
+
+    EXPECT_EQ(printer->tag.toStdString(), "StepTest");
+    EXPECT_EQ(roundMs(printer->beginMs), btimer.elapsed());
+    EXPECT_EQ(roundMs(printer->stepMs), stimer.elapsed());
+    EXPECT_EQ(printer->info.toStdString(), "Begin");
+
+    Sleep::msleep(2);
+
+    STEP_TIME("StepTest", "end step 1");
+
+    EXPECT_EQ(printer->tag.toStdString(), "StepTest");
+    EXPECT_EQ(roundMs(printer->beginMs), btimer.elapsed());
+    EXPECT_EQ(roundMs(printer->stepMs), stimer.elapsed());
+    EXPECT_EQ(printer->info.toStdString(), "end step 1");
+
+    stimer.restart();
+
+    Sleep::msleep(10);
+
+    STEP_TIME("StepTest", "end step 2");
+
+    EXPECT_EQ(printer->tag.toStdString(), "StepTest");
+    EXPECT_EQ(roundMs(printer->beginMs), btimer.elapsed());
+    EXPECT_EQ(roundMs(printer->stepMs), stimer.elapsed());
+    EXPECT_EQ(printer->info.toStdString(), "end step 2");
 }
 
 TEST_F(ProfilerTests, DISABLED_Overhead)
