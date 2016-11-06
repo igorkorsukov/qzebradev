@@ -489,7 +489,7 @@ struct LogLayoutBench : public Overhead::BenchFunc {
 
 };
 
-TEST_F(LoggerTests, LogLayout_Benchmark)
+TEST_F(LoggerTests, DISABLED_LogLayout_Benchmark)
 {
 
     LogLayoutBench b(LogLayout("${datetime} | ${type|5} | ${tag|26} | ${thread} | ${message}"), LogMsg("WARN", "MyTag", "LogLayout_FormatOutput"));
@@ -518,7 +518,7 @@ struct OverheadFuncs : public Overhead::OverFuncs {
     }
 };
 
-TEST_F(LoggerTests, Overhead_Noop)
+TEST_F(LoggerTests, DISABLED_Overhead_Noop)
 {
     Logger::instance()->setLevel(Logger::Debug);
     Logger::instance()->setIsCatchQtMsg(false); //! NOTE For output overhead
@@ -533,7 +533,7 @@ TEST_F(LoggerTests, Overhead_Noop)
     ASSERT_LT(over.overPercent, 25);
 }
 
-TEST_F(LoggerTests, Overhead_NoDebug)
+TEST_F(LoggerTests, DISABLED_Overhead_NoDebug)
 {
     Logger::instance()->setLevel(Logger::Normal);
     Logger::instance()->setIsCatchQtMsg(false); //! NOTE For output overhead
