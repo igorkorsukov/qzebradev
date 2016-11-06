@@ -355,7 +355,9 @@ void Logger::logMsgHandler(enum QtMsgType type, const char *s)
         return;
     }
 
-    LogMsg logMsg(qtMsgTypeToString(type), "Qt", QString(s));
+    static const QString Qt("Qt");
+
+    LogMsg logMsg(qtMsgTypeToString(type), Qt, QString(s));
 
     Logger::instance()->write(logMsg);
 }

@@ -175,20 +175,20 @@ TEST_F(LoggerTests, LOG)
     LOGE() << "Error msg";
     ASSERT_EQ(dest->msgs.count(), 1);
     EXPECT_EQ_STR(dest->msgs.at(0).type, "ERROR");
-    EXPECT_EQ_STR(dest->msgs.at(0).tag, " LoggerTests_LOG_Test");        //! NOTE LoggerTests_LOG_Test - class name
-    EXPECT_EQ_STR(dest->msgs.at(0).message, "TestBody() Error msg ");   //! NOTE TestBody() - function name
+    EXPECT_EQ_STR(dest->msgs.at(0).tag, "LoggerTests_LOG_Test");        //! NOTE LoggerTests_LOG_Test - class name
+    EXPECT_EQ_STR(dest->msgs.at(0).message, "TestBody() Error msg");   //! NOTE TestBody() - function name
 
     LOGW() << "Warning msg";
     ASSERT_EQ(dest->msgs.count(), 2);
     EXPECT_EQ_STR(dest->msgs.at(1).type, "WARN");
-    EXPECT_EQ_STR(dest->msgs.at(1).tag, " LoggerTests_LOG_Test");
-    EXPECT_EQ_STR(dest->msgs.at(1).message, "TestBody() Warning msg ");
+    EXPECT_EQ_STR(dest->msgs.at(1).tag, "LoggerTests_LOG_Test");
+    EXPECT_EQ_STR(dest->msgs.at(1).message, "TestBody() Warning msg");
 
     LOGI() << "Info msg";
     ASSERT_EQ(dest->msgs.count(), 3);
     EXPECT_EQ_STR(dest->msgs.at(2).type, "INFO");
-    EXPECT_EQ_STR(dest->msgs.at(2).tag, " LoggerTests_LOG_Test");
-    EXPECT_EQ_STR(dest->msgs.at(2).message, "TestBody() Info msg ");
+    EXPECT_EQ_STR(dest->msgs.at(2).tag, "LoggerTests_LOG_Test");
+    EXPECT_EQ_STR(dest->msgs.at(2).message, "TestBody() Info msg");
 
     LOGD() << "Debug msg";
     ASSERT_EQ(dest->msgs.count(), 3); //! NOTE Not output with log level Normal (default)
@@ -198,8 +198,8 @@ TEST_F(LoggerTests, LOG)
     LOGD() << "Debug msg";
     ASSERT_EQ(dest->msgs.count(), 4);
     EXPECT_EQ_STR(dest->msgs.at(3).type, "DEBUG");
-    EXPECT_EQ_STR(dest->msgs.at(3).tag, " LoggerTests_LOG_Test");
-    EXPECT_EQ_STR(dest->msgs.at(3).message, "TestBody() Debug msg ");
+    EXPECT_EQ_STR(dest->msgs.at(3).tag, "LoggerTests_LOG_Test");
+    EXPECT_EQ_STR(dest->msgs.at(3).message, "TestBody() Debug msg");
 }
 
 TEST_F(LoggerTests, QtDebug)
@@ -266,7 +266,7 @@ TEST_F(LoggerTests, Logger_Dest)
 
     EXPECT_EQ_STR(dest1Msg.type, "INFO");
     EXPECT_EQ_STR(dest1Msg.tag, "MYTAG");
-    EXPECT_EQ_STR(dest1Msg.message, "TestDestMsg ");
+    EXPECT_EQ_STR(dest1Msg.message, "TestDestMsg");
     EXPECT_EQ(dest1Msg.dateTime, dt);
     EXPECT_EQ(dest1Msg.thread, thread);
 
@@ -275,7 +275,7 @@ TEST_F(LoggerTests, Logger_Dest)
 
     EXPECT_EQ_STR(dest2Msg.type, "INFO");
     EXPECT_EQ_STR(dest2Msg.tag, "MYTAG");
-    EXPECT_EQ_STR(dest2Msg.message, "TestDestMsg ");
+    EXPECT_EQ_STR(dest2Msg.message, "TestDestMsg");
     EXPECT_EQ(dest2Msg.dateTime, dt);
     EXPECT_EQ(dest2Msg.thread, thread);
 }

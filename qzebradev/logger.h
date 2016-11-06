@@ -5,7 +5,6 @@
 #include <QList>
 #include <QMutex>
 #include <QThread>
-#include <cassert>
 #include <QDateTime>
 
 namespace QZebraDev {
@@ -157,12 +156,13 @@ public:
         : m_msg(type, tag), m_stream(&m_msg.message) {}
     
     ~LogStream() {
-        QT_TRY  {
-            Logger::instance()->write(m_msg);
-        } QT_CATCH(...) {
-            Q_ASSERT(!"exception in logger helper destructor");
-            QT_RETHROW;
+
+        int mcount = m_msg.message.count();
+        if (mcount > 0 && m_msg.message.at(mcount-1) == ' ') {
+            m_msg.message.chop(1); //! QDebug adds at the end of the space
         }
+
+        Logger::instance()->write(m_msg);
     }
     
     QDebug& stream() { return m_stream.noquote(); }

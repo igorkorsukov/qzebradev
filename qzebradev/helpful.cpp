@@ -9,7 +9,7 @@ static const QChar Space(' ');
 QString Helpful::className(const QString &funcInfo)
 {
     int inx = funcInfo.lastIndexOf(ClassSep, funcInfo.indexOf(ArgBegin));
-    int binx = funcInfo.lastIndexOf(Space, inx);
+    int binx = funcInfo.lastIndexOf(Space, inx) + 1;
     return funcInfo.mid(binx, inx - binx);
 }
 
