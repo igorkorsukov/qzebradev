@@ -2,6 +2,7 @@
 #include "qzebradev/profiler.h"
 #include "qzebradev/profilerlogprinter.h"
 #include "qzebradev/logger.h"
+#include "qzebradev/gtesthelpful.h"
 
 #include <QElapsedTimer>
 #include "overhead.h"
@@ -127,20 +128,24 @@ TEST_F(ProfilerTests, Example)
 
 }
 
-struct StepPrinterMock : public Profiler::Printer
+struct PrinterMock : public Profiler::Printer
 {
     void printStep(const QString &_tag, double _beginMs, double _stepMs, const QString &_info)
     {
-        tag = _tag;
-        beginMs = _beginMs;
-        stepMs = _stepMs;
-        info = _info;
+        step = Step(_tag, _beginMs, _stepMs, _info);
     }
 
-    QString tag;
-    double beginMs;
-    double stepMs;
-    QString info;
+    struct Step {
+        QString tag;
+        double beginMs;
+        double stepMs;
+        QString info;
+        Step() {}
+        Step(const QString &_tag, double _beginMs, double _stepMs, const QString &_info)
+            : tag(_tag), beginMs(_beginMs),stepMs(_stepMs), info(_info) {}
+    };
+    Step step;
+
 };
 
 int roundMs(double ms)
@@ -150,7 +155,7 @@ int roundMs(double ms)
 
 TEST_F(ProfilerTests, Step)
 {
-    StepPrinterMock *printer = new StepPrinterMock();
+    PrinterMock *printer = new PrinterMock();
     Profiler::instance()->setup(Profiler::Options(), printer);
 
     QElapsedTimer btimer;
@@ -160,19 +165,19 @@ TEST_F(ProfilerTests, Step)
     btimer.start();
     stimer.start();
 
-    EXPECT_EQ(printer->tag.toStdString(), "StepTest");
-    EXPECT_EQ(roundMs(printer->beginMs), btimer.elapsed());
-    EXPECT_EQ(roundMs(printer->stepMs), stimer.elapsed());
-    EXPECT_EQ(printer->info.toStdString(), "Begin");
+    EXPECT_EQ_STR(printer->step.tag, "StepTest");
+    EXPECT_EQ(roundMs(printer->step.beginMs), btimer.elapsed());
+    EXPECT_EQ(roundMs(printer->step.stepMs), stimer.elapsed());
+    EXPECT_EQ_STR(printer->step.info, "Begin");
 
     Sleep::msleep(2);
 
     STEP_TIME("StepTest", "end step 1");
 
-    EXPECT_EQ(printer->tag.toStdString(), "StepTest");
-    EXPECT_EQ(roundMs(printer->beginMs), btimer.elapsed());
-    EXPECT_EQ(roundMs(printer->stepMs), stimer.elapsed());
-    EXPECT_EQ(printer->info.toStdString(), "end step 1");
+    EXPECT_EQ_STR(printer->step.tag, "StepTest");
+    EXPECT_EQ(roundMs(printer->step.beginMs), btimer.elapsed());
+    EXPECT_EQ(roundMs(printer->step.stepMs), stimer.elapsed());
+    EXPECT_EQ_STR(printer->step.info, "end step 1");
 
     stimer.restart();
 
@@ -180,10 +185,63 @@ TEST_F(ProfilerTests, Step)
 
     STEP_TIME("StepTest", "end step 2");
 
-    EXPECT_EQ(printer->tag.toStdString(), "StepTest");
-    EXPECT_EQ(roundMs(printer->beginMs), btimer.elapsed());
-    EXPECT_EQ(roundMs(printer->stepMs), stimer.elapsed());
-    EXPECT_EQ(printer->info.toStdString(), "end step 2");
+    EXPECT_EQ_STR(printer->step.tag, "StepTest");
+    EXPECT_EQ(roundMs(printer->step.beginMs), btimer.elapsed());
+    EXPECT_EQ(roundMs(printer->step.stepMs), stimer.elapsed());
+    EXPECT_EQ_STR(printer->step.info, "end step 2");
+}
+
+struct TestClass {
+    void func1() {
+        TRACEFUNC;
+        Sleep::msleep(100);
+    }
+
+    void func2() {
+        TRACEFUNC;
+        Sleep::msleep(50);
+    }
+
+    void func3() {
+        TRACEFUNC;
+        func1();
+        func2();
+    }
+};
+
+TEST_F(ProfilerTests, Func)
+{
+    Profiler* profiler = Profiler::instance();
+    profiler->clear();
+
+    TestClass t;
+
+    t.func1();
+    t.func1();
+
+    t.func2();
+    t.func2();
+
+    t.func3();
+    t.func3();
+
+    Profiler::Data data = profiler->threadsData();
+    ASSERT_EQ(data.threads.count(), 1);
+
+    Profiler::Data::Thread thread = data.threads[data.mainThread];
+    ASSERT_EQ(thread.funcs.count(), 3);
+
+    Profiler::Data::Func func1 = thread.funcs.value("void TestClass::func1()");
+    EXPECT_EQ(func1.callcount, 4u);
+    EXPECT_EQ(roundMs(func1.sumtimeMs), 400);
+
+    Profiler::Data::Func func3 = thread.funcs.value("void TestClass::func3()");
+    EXPECT_EQ(func3.callcount, 2u);
+    EXPECT_EQ(roundMs(func3.sumtimeMs), 300);
+
+    Profiler::Data::Func func2 = thread.funcs.value("void TestClass::func2()");
+    EXPECT_EQ(func2.callcount, 4u);
+    EXPECT_EQ(roundMs(func2.sumtimeMs), 200);
 }
 
 TEST_F(ProfilerTests, DISABLED_Overhead)

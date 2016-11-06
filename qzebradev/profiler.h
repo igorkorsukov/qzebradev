@@ -75,16 +75,16 @@ public:
 
         struct Func {
             QString func;
-            uint callcount;
-            double calltime;    // ms
-            double sumtime;     // ms
-            Func(const QString& f, uint cc, double ct, double st)
-                : func(f), callcount(cc), calltime(ct), sumtime(st){}
+            uint callcount;  
+            double sumtimeMs;
+            Func() : callcount(0), sumtimeMs(0) {}
+            Func(const QString& f, uint cc, double st)
+                : func(f), callcount(cc), sumtimeMs(st){}
         };
 
         struct Thread {
             quintptr thread;
-            QList<Func> funcs;
+            QHash<QString, Func> funcs;
             Thread() : thread(0) {}
         };
 
@@ -161,9 +161,8 @@ private:
         const QString& func;
         QElapsedTimer timer;
         uint callcount;
-        double calltimeMs;
         double sumtimeMs;
-        explicit FuncTimer(const QString &f) : func(f), callcount(0), calltimeMs(0), sumtimeMs(0) {}
+        explicit FuncTimer(const QString &f) : func(f), callcount(0), sumtimeMs(0) {}
     };
 
     typedef QHash<const QString*, FuncTimer* > FuncTimers;

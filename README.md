@@ -7,7 +7,7 @@ Simple developer tools for developing with Qt
 Simple, convinient, thread safe and flexible logger for Qt
 
 Features:
-* Stream input (use QDebug)
+* Stream input (used QDebug)
 * Many destinations 
 * Log levels, messages types, messages tags
 * Very small overhead for disabled debug (with use macro) 

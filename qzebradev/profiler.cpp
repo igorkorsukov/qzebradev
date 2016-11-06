@@ -148,17 +148,18 @@ void Profiler::endFunc(const QString &func, quintptr th)
     if (timer) {
         if (timer->timer.isValid()) { //! NOTE If not valid then it is probably a recursive call
 
+            double calltimeMs = timer->timer.nsecsElapsed() * 0.000001; //! NOTE To millisecond
+
             timer->callcount++;
-            timer->calltimeMs = timer->timer.nsecsElapsed() * 0.000001; //! NOTE To millisecond
-            timer->sumtimeMs += timer->calltimeMs;
+            timer->sumtimeMs += calltimeMs;
             timer->timer.invalidate();
 
             if (m_options.funcsTraceEnabled) {
-                printer()->printTrace(func, timer->calltimeMs, timer->callcount, timer->sumtimeMs);
+                printer()->printTrace(func, calltimeMs, timer->callcount, timer->sumtimeMs);
             }
 
-            if (index == MAIN_THREAD_INDEX && m_detector.enabled && timer->calltimeMs > m_options.longFuncThreshold) {
-                printer()->printEndLongFunc(func, timer->calltimeMs);
+            if (index == MAIN_THREAD_INDEX && m_detector.enabled && calltimeMs > m_options.longFuncThreshold) {
+                printer()->printEndLongFunc(func, calltimeMs);
             }
         }
     }
@@ -202,7 +203,7 @@ void Profiler::StepTimer::restart()
 
 void Profiler::StepTimer::nextStep()
 {
-   this-> stepTime.restart();
+    this-> stepTime.restart();
 }
 
 int Profiler::FuncsData::threadIndex(quintptr th) const
@@ -295,11 +296,10 @@ Profiler::Data Profiler::threadsData(Data::Mode mode) const
             Data::Func f(
                         ft->func,
                         ft->callcount,
-                        ft->callcount ? (ft->sumtimeMs / static_cast<double>(ft->callcount)) : 0,
                         ft->sumtimeMs
                         );
 
-            thdata.funcs << f;
+            thdata.funcs[f.func] = f;
         }
 
         data.threads[thdata.thread] = thdata;
@@ -482,7 +482,7 @@ void Profiler::Printer::printData(const Data &data, Data::Mode mode, int maxcoun
 struct IsLessBySum {
     bool operator()(const Profiler::Data::Func &f, const Profiler::Data::Func &s)
     {
-        return f.sumtime > s.sumtime;
+        return f.sumtimeMs > s.sumtimeMs;
     }
 };
 
@@ -494,9 +494,9 @@ QString Profiler::Printer::formatData(const Data &data, Data::Mode mode, int max
 
     if (mode == Data::OnlyMain || mode == Data::All) {
 
-        Data::Thread thdata = data.threads[data.mainThread];
-        std::sort(thdata.funcs.begin(), thdata.funcs.end(), IsLessBySum());
-        funcsToStream(stream, QString("Main thread. Top %1 by sum time (total count: %2)").arg(maxcount).arg(thdata.funcs.count()), thdata.funcs, maxcount);
+        QList<Data::Func> thfuncs = data.threads[data.mainThread].funcs.values();
+        std::sort(thfuncs.begin(), thfuncs.end(), IsLessBySum());
+        funcsToStream(stream, QString("Main thread. Top %1 by sum time (total count: %2)").arg(maxcount).arg(thfuncs.count()), thfuncs, maxcount);
     }
 
     if (mode == Data::OnlyOther || mode == Data::All) {
@@ -506,7 +506,7 @@ QString Profiler::Printer::formatData(const Data &data, Data::Mode mode, int max
         while (it != end) {
 
             if (it.key() != data.mainThread) {
-                funcs << it.value().funcs;
+                funcs << it.value().funcs.values();
             }
 
             ++it;
@@ -531,7 +531,7 @@ void Profiler::Printer::funcsToStream(QTextStream &stream, const QString &title,
     int count = funcs.count() < _count ? funcs.count() : _count;
     for (int i = 0; i < count; ++i) {
         const Data::Func &f = funcs.at(i);
-        stream << FORMAT(f.func, 60) << VALUE_D(f.calltime, " ms") << VALUE(f.callcount, "") << VALUE_D(f.sumtime, " ms") << "\n";
+        stream << FORMAT(f.func, 60) << VALUE_D(f.callcount ? (f.sumtimeMs / static_cast<double>(f.callcount)) : 0, " ms") << VALUE(f.callcount, "") << VALUE_D(f.sumtimeMs, " ms") << "\n";
     }
     stream << "\n\n";
 }
