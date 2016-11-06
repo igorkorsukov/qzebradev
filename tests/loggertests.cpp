@@ -1,27 +1,11 @@
 #include "gtest/gtest.h"
 #include "qzebradev/log.h"
 #include "qzebradev/logdefdest.h"
-#include "qzebradev/gtesthelpful.h"
-
-#include "overhead.h"
 
 using namespace QZebraDev;
 
-
 class LoggerTests : public ::testing::Test
-{
-
-};
-
-class LogDestMock: public LogDest {
-public:
-    LogDestMock() : LogDest(LogLayout("")) {}
-
-    QString name() const { return "LogDestMock"; }
-    void write(const LogMsg &_msg) { msgs.append(_msg); }
-
-    QList<LogMsg> msgs;
-};
+{};
 
 TEST_F(LoggerTests, Example)
 {
@@ -122,6 +106,21 @@ TEST_F(LoggerTests, Example)
     //! Custom LogDest - inherits of the LogDest and override method "write"
     //! Custom log macro - see log.h
 }
+
+//! Tests ------------------------------
+
+#include "qzebradev/gtesthelpful.h"
+#include "overhead.h"
+
+class LogDestMock: public LogDest {
+public:
+    LogDestMock() : LogDest(LogLayout("")) {}
+
+    QString name() const { return "LogDestMock"; }
+    void write(const LogMsg &_msg) { msgs.append(_msg); }
+
+    QList<LogMsg> msgs;
+};
 
 TEST_F(LoggerTests, Logger_DefaultSetup)
 {
