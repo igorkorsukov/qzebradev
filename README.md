@@ -1,7 +1,6 @@
 Simple developer tools for developing with Qt
 ---------------------------------------------
 
-under developing
 
 #### Logger
 
@@ -31,3 +30,12 @@ Source:
 * log.h - macro for simple use logger
 
 Change log.h change log as you see fit, remove unnecessary
+
+Or use all QZebraDev suite 
+
+
+#### Profiler
+under developing
+
+#### Concurrent monitor
+under developing
