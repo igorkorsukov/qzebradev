@@ -4,7 +4,7 @@ Simple developer tools for developing with Qt
 
 #### Logger
 
-Simple, convinient, thread safe and flexible logger for Qt
+Simple, convinient, thread safe and flexible logger for developing with Qt
 
 Features:
 * Stream input (used QDebug)
@@ -35,7 +35,26 @@ Or use all QZebraDev suite
 
 
 #### Profiler
-under developing
+Simple, embedded profiler with very small overhead for developing with Qt
+
+Features:
+* Steps duration measure 
+* Function duration measure 
+* Detecting long function during functions execution (It helps determine the hovering function)
+* Enabled / disabled on compile time and run time
+* Custom data printer
+
+[Example](https://github.com/igorkorsukov/qzebradev/blob/master/tests/profilertests.cpp#L13)
+
+
+To use Profiler within your software project include the Profiler source into your project
+
+Source:
+* qzebradev/profiler.h - profiler and macro to use
+* qzebradev/profiler.cpp - profiler and macro to use
+
+
+Or use all QZebraDev suite, including log.h
 
 #### Concurrent monitor
 under developing
