@@ -20,9 +20,11 @@
 #define LOG_TAG CLASSNAME(Q_FUNC_INFO)
 #endif
 
+
 #define IF_LOGLEVEL(level)  if(QZebraDev::Logger::instance()->isLevel(level))
 
-#define LOG(type, tag)  QZebraDev::LogStream(type, tag).stream() << FUNCNAME(Q_FUNC_INFO)
+#define LOG_STREAM(type, tag) QZebraDev::LogStream(type, tag).stream()
+#define LOG(type, tag)  LOG_STREAM(type, tag) << FUNCNAME(Q_FUNC_INFO)
 
 #define LOGE()      IF_LOGLEVEL(QZebraDev::Logger::Normal) LOG(QZebraDev::Logger::ERROR, LOG_TAG)
 #define LOGW()      IF_LOGLEVEL(QZebraDev::Logger::Normal) LOG(QZebraDev::Logger::WARN, LOG_TAG)

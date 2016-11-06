@@ -94,7 +94,7 @@ LogLayout::Pattern LogLayout::parcePattern(const QString &format, const QString 
 
         if (filterIndex > -1) {
             QString filter = format.mid(filterIndex + 1, endPatternIndex - filterIndex - 1);
-            p.leftJustified = filter.toInt();
+            p.minWidth = filter.toInt();
         }
 
         p.count = endPatternIndex - beginPatternIndex + 1;
@@ -126,31 +126,31 @@ QString LogLayout::formatPattern(const LogMsg &logMsg, const Pattern &p) const
 {
     if (DATETIME_PATTERN == p.pattern) {
 
-        return formatDateTime(logMsg.dateTime).leftJustified(p.leftJustified, SPACE);
+        return formatDateTime(logMsg.dateTime).leftJustified(p.minWidth, SPACE);
 
     } else if (TIME_PATTERN == p.pattern) {
 
-        return formatTime(logMsg.dateTime.time()).leftJustified(p.leftJustified, SPACE);
+        return formatTime(logMsg.dateTime.time()).leftJustified(p.minWidth, SPACE);
 
     } else if (TYPE_PATTERN == p.pattern) {
 
-        return logMsg.type.leftJustified(p.leftJustified, SPACE);
+        return logMsg.type.leftJustified(p.minWidth, SPACE);
 
     } else if (TAG_PATTERN == p.pattern) {
 
-        return logMsg.tag.leftJustified(p.leftJustified, SPACE);
+        return logMsg.tag.leftJustified(p.minWidth, SPACE);
 
     } else if (THREAD_PATTERN == p.pattern) {
 
-        return ((qApp && qApp->thread() == logMsg.thread) ? MAIN : PTRSTR(logMsg.thread)).leftJustified(p.leftJustified, SPACE);
+        return ((qApp && qApp->thread() == logMsg.thread) ? MAIN : PTRSTR(logMsg.thread)).leftJustified(p.minWidth, SPACE);
 
     } else if (MESSAGE_PATTERN == p.pattern) {
 
-        return logMsg.message.leftJustified(p.leftJustified, SPACE);
+        return logMsg.message.leftJustified(p.minWidth, SPACE);
 
     } else if (TRIMMESSAGE_PATTERN == p.pattern) {
 
-        return logMsg.message.simplified().remove(QChar('"')).replace("\\", "\\\\").leftJustified(p.leftJustified, SPACE);
+        return logMsg.message.simplified().remove(QChar('"')).replace("\\", "\\\\").leftJustified(p.minWidth, SPACE);
     }
 
     return QString();
@@ -269,11 +269,21 @@ void Logger::setupDefault()
 void Logger::write(const LogMsg &logMsg)
 {
     QMutexLocker locker(&m_mutex);
-    if ((m_level == Full || m_level == Normal || isType(logMsg.type))){
+    if (isAsseptMsg(logMsg.type)) {
         foreach (LogDest *dest, m_destList) {
             dest->write(logMsg);
         }
     }
+}
+
+bool Logger::isAsseptMsg(const QString &type) const
+{
+    return m_level == Full || m_level == Normal || isType(type);
+}
+
+bool Logger::isType(const QString &type) const
+{
+    return m_types.contains(type);
 }
 
 void Logger::addLogDest(LogDest *dest)
@@ -298,9 +308,14 @@ Logger::Level Logger::level() const
     return m_level;
 }
 
-QStringList Logger::typeList() const
+QSet<QString> Logger::types() const
 {
-    return m_types.toList();
+    return m_types;
+}
+
+void Logger::setTypes(const QSet<QString> &types)
+{
+    m_types = types;
 }
 
 void Logger::setType(const QString &type, bool enb)

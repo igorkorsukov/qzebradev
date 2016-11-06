@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 #include "qzebradev/log.h"
 #include "qzebradev/logdefdest.h"
+#include "qzebradev/gtesthelpful.h"
 
 #include "overhead.h"
 
@@ -110,13 +111,174 @@ TEST_F(LoggerTests, Example)
     //! Custom log macro - see log.h
 }
 
+class LogDestMock: public LogDest {
+public:
+    LogDestMock() : LogDest(LogLayout("")) {}
+
+    void write(const LogMsg &_msg) { msgs.append(_msg); }
+
+    QList<LogMsg> msgs;
+};
+
+TEST_F(LoggerTests, Logger_Dest)
+{
+    LogDestMock *dest1 = new LogDestMock();
+    LogDestMock *dest2 = new LogDestMock();
+    Logger::instance()->clearLogDest();
+    Logger::instance()->addLogDest(dest1);
+    Logger::instance()->addLogDest(dest2);
+
+    LOG_STREAM("INFO", "MYTAG") << "TestDestMsg";
+
+    QDateTime dt = QDateTime::currentDateTime();
+    QThread *thread = QThread::currentThread();
+
+    ASSERT_EQ(dest1->msgs.count(), 1);
+    LogMsg dest1Msg = dest1->msgs.at(0);
+
+    EXPECT_EQ_STR(dest1Msg.type, "INFO");
+    EXPECT_EQ_STR(dest1Msg.tag, "MYTAG");
+    EXPECT_EQ_STR(dest1Msg.message, "TestDestMsg ");
+    EXPECT_EQ(dest1Msg.dateTime, dt);
+    EXPECT_EQ(dest1Msg.thread, thread);
+
+    ASSERT_EQ(dest2->msgs.count(), 1);
+    LogMsg dest2Msg = dest2->msgs.at(0);
+
+    EXPECT_EQ_STR(dest2Msg.type, "INFO");
+    EXPECT_EQ_STR(dest2Msg.tag, "MYTAG");
+    EXPECT_EQ_STR(dest2Msg.message, "TestDestMsg ");
+    EXPECT_EQ(dest2Msg.dateTime, dt);
+    EXPECT_EQ(dest2Msg.thread, thread);
+}
+
+TEST_F(LoggerTests, Logger_Level)
+{
+    /*
+    enum Level {
+        Off     = 0,
+        Normal  = 1,
+        Debug   = 2,
+        Full    = 3
+    };
+    */
+
+    Logger* logger = Logger::instance();
+
+    logger->setLevel(Logger::Off);
+    EXPECT_FALSE(logger->isLevel(Logger::Normal));
+    EXPECT_FALSE(logger->isLevel(Logger::Debug));
+    EXPECT_FALSE(logger->isLevel(Logger::Full));
+
+    logger->setLevel(Logger::Normal);
+    EXPECT_TRUE(logger->isLevel(Logger::Normal));
+    EXPECT_FALSE(logger->isLevel(Logger::Debug));
+    EXPECT_FALSE(logger->isLevel(Logger::Full));
+
+    logger->setLevel(Logger::Debug);
+    EXPECT_TRUE(logger->isLevel(Logger::Normal));
+    EXPECT_TRUE(logger->isLevel(Logger::Debug));
+    EXPECT_FALSE(logger->isLevel(Logger::Full));
+
+    logger->setLevel(Logger::Full);
+    EXPECT_TRUE(logger->isLevel(Logger::Normal));
+    EXPECT_TRUE(logger->isLevel(Logger::Debug));
+    EXPECT_TRUE(logger->isLevel(Logger::Full));
+}
+
+TEST_F(LoggerTests, Logger_Types_Set)
+{
+    Logger* logger = Logger::instance();
+
+    QSet<QString> types;
+    types << "ERROR" << "WARN" << "INFO" << "DEBUG";
+
+    logger->setTypes(types);
+
+    EXPECT_TRUE(logger->isType("ERROR"));
+    EXPECT_FALSE(logger->isType("TRACE"));
+
+    logger->setType("TRACE", true);
+    EXPECT_TRUE(logger->isType("TRACE"));
+
+    logger->setType("DEBUG", false);
+    EXPECT_FALSE(logger->isType("DEBUG"));
+}
+
+TEST_F(LoggerTests, Logger_Types_Assept)
+{
+    Logger* logger = Logger::instance();
+
+    QSet<QString> types;
+    types << "ERROR" << "WARN" << "INFO" << "DEBUG";
+    logger->setTypes(types);
+
+    logger->setLevel(Logger::Normal);
+    EXPECT_TRUE(logger->isAsseptMsg("ERROR"));
+
+    //! NOTE In normal level, not the type checking, should be level checking before output msg, see log.h
+    EXPECT_TRUE(logger->isAsseptMsg("DEBUG"));
+    EXPECT_TRUE(logger->isAsseptMsg("TRACE"));
+
+
+    logger->setLevel(Logger::Debug);
+    EXPECT_TRUE(logger->isAsseptMsg("DEBUG"));
+    EXPECT_FALSE(logger->isAsseptMsg("TRACE"));
+
+    logger->setType("DEBUG", false);
+    logger->setType("TRACE", true);
+    EXPECT_FALSE(logger->isAsseptMsg("DEBUG"));
+    EXPECT_TRUE(logger->isAsseptMsg("TRACE"));
+
+
+    logger->setLevel(Logger::Full);
+    logger->setType("DEBUG", false);
+    logger->setType("TRACE", false);
+
+    EXPECT_TRUE(logger->isAsseptMsg("DEBUG"));
+    EXPECT_TRUE(logger->isAsseptMsg("TRACE"));
+}
+
+TEST_F(LoggerTests, Logger_CatchQtMsg)
+{
+    Logger* logger = Logger::instance();
+    logger->setupDefault();
+    logger->setLevel(Logger::Debug);
+
+    LogDestMock *dest = new LogDestMock();
+    logger->clearLogDest();
+    logger->addLogDest(dest);
+
+    logger->setIsCatchQtMsg(true);
+
+    qDebug() << "TestMsg";
+
+    QDateTime dt = QDateTime::currentDateTime();
+    QThread *thread = QThread::currentThread();
+
+    ASSERT_EQ(dest->msgs.count(), 1);
+    LogMsg destMsg = dest->msgs.at(0);
+
+    EXPECT_EQ_STR(destMsg.type, "DEBUG");
+    EXPECT_EQ_STR(destMsg.tag, "Qt");
+    EXPECT_EQ_STR(destMsg.message, "TestMsg");
+    EXPECT_EQ(destMsg.dateTime, dt);
+    EXPECT_EQ(destMsg.thread, thread);
+
+    logger->setIsCatchQtMsg(false);
+
+    qDebug() << "TestMsg";
+
+    ASSERT_EQ(dest->msgs.count(), 1);
+}
+
 TEST_F(LoggerTests, LogLayout_FormatTime)
 {
     LogLayout l("");
 
     QTime time(11, 47, 3, 34);
 
-    EXPECT_EQ(l.formatTime(time), "11:47:03.034");
+    EXPECT_EQ_STR(l.formatTime(time), "11:47:03.034");
 }
 
 TEST_F(LoggerTests, LogLayout_FormatDate)
@@ -125,7 +287,7 @@ TEST_F(LoggerTests, LogLayout_FormatDate)
 
     QDate date(2016, 11, 4);
 
-    EXPECT_EQ(l.formatDate(date), "2016-11-04");
+    EXPECT_EQ_STR(l.formatDate(date), "2016-11-04");
 }
 
 TEST_F(LoggerTests, LogLayout_FormatDateTime)
@@ -144,21 +306,21 @@ TEST_F(LoggerTests, LogLayout_ParcePattern)
     LogLayout::Pattern p = LogLayout::parcePattern(format, "${type}");
     EXPECT_EQ(p.index, 2);
     EXPECT_EQ(p.count, 7);
-    EXPECT_EQ(p.leftJustified, 0);
-    EXPECT_EQ(p.beforeStr.toStdString(), "| ");
+    EXPECT_EQ(p.minWidth, 0);
+    EXPECT_EQ_STR(p.beforeStr, "| ");
 
     p = LogLayout::parcePattern(format, "${tag}");
     EXPECT_EQ(p.index, 12);
     EXPECT_EQ(p.count, 9);
-    EXPECT_EQ(p.leftJustified, 26);
-    EXPECT_EQ(p.beforeStr.toStdString(), " | ");
+    EXPECT_EQ(p.minWidth, 26);
+    EXPECT_EQ_STR(p.beforeStr, " | ");
 
 
     p = LogLayout::parcePattern(format, "${datetime}");
     EXPECT_EQ(p.index, -1);
     EXPECT_EQ(p.count, 0);
-    EXPECT_EQ(p.leftJustified, 0);
-    EXPECT_EQ(p.beforeStr.toStdString(), "");
+    EXPECT_EQ(p.minWidth, 0);
+    EXPECT_EQ_STR(p.beforeStr, "");
 }
 
 TEST_F(LoggerTests, LogLayout_Patterns)
@@ -167,11 +329,11 @@ TEST_F(LoggerTests, LogLayout_Patterns)
 
     QList<LogLayout::Pattern> patterns = LogLayout::patterns(format);
     ASSERT_EQ(patterns.count(), 5);
-    EXPECT_EQ(patterns.at(0).pattern.toStdString(), "${datetime}");
-    EXPECT_EQ(patterns.at(1).pattern.toStdString(), "${type}");
-    EXPECT_EQ(patterns.at(2).pattern.toStdString(), "${tag}");
-    EXPECT_EQ(patterns.at(3).pattern.toStdString(), "${thread}");
-    EXPECT_EQ(patterns.at(4).pattern.toStdString(), "${message}");
+    EXPECT_EQ_STR(patterns.at(0).pattern, "${datetime}");
+    EXPECT_EQ_STR(patterns.at(1).pattern, "${type}");
+    EXPECT_EQ_STR(patterns.at(2).pattern, "${tag}");
+    EXPECT_EQ_STR(patterns.at(3).pattern, "${thread}");
+    EXPECT_EQ_STR(patterns.at(4).pattern, "${message}");
 }
 
 TEST_F(LoggerTests, LogLayout_FormatOutput)
@@ -181,7 +343,7 @@ TEST_F(LoggerTests, LogLayout_FormatOutput)
     LogMsg msg("WARN", "MyTag", "LogLayout_FormatOutput");
     msg.dateTime = QDateTime(QDate(2016, 11, 4), QTime(12, 2, 32, 345));
 
-    EXPECT_EQ(l.output(msg).toStdString(), "2016-11-04T12:02:32.345 | WARN  | MyTag                      | main | LogLayout_FormatOutput");
+    EXPECT_EQ_STR(l.output(msg), "2016-11-04T12:02:32.345 | WARN  | MyTag                      | main | LogLayout_FormatOutput");
 }
 
 struct LogLayoutBench : public Overhead::BenchFunc {

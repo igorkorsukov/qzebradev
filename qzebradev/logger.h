@@ -15,6 +15,8 @@ namespace QZebraDev {
 class LogMsg 
 {
 public:
+
+    LogMsg() : thread(0) {}
     
     LogMsg(const QString &l, const QString &t)
         : type(l), tag(t), dateTime(QDateTime::currentDateTime()),
@@ -43,8 +45,8 @@ public:
         QString beforeStr;
         int index;
         int count;
-        int leftJustified;
-        Pattern() : index(-1), count(0), leftJustified(0) {}
+        int minWidth;
+        Pattern() : index(-1), count(0), minWidth(0) {}
     };
 
     virtual QString output(const LogMsg &logMsg) const;
@@ -110,9 +112,12 @@ public:
     Level level() const;
     inline bool isLevel(Level level) const { return level <= m_level && level != Off; }
     
-    QStringList typeList() const;
+    QSet<QString> types() const;
+    void setTypes(const QSet<QString> &types);
     void setType(const QString &type, bool enb);
-    inline bool isType(const QString &type) const { return m_types.contains(type); }
+    bool isType(const QString &type) const;
+
+    bool isAsseptMsg(const QString &type) const;
 
     static void setIsCatchQtMsg(bool arg);
 
