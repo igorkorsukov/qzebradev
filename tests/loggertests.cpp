@@ -13,6 +13,16 @@ class LoggerTests : public ::testing::Test
 
 };
 
+class LogDestMock: public LogDest {
+public:
+    LogDestMock() : LogDest(LogLayout("")) {}
+
+    QString name() const { return "LogDestMock"; }
+    void write(const LogMsg &_msg) { msgs.append(_msg); }
+
+    QList<LogMsg> msgs;
+};
+
 TEST_F(LoggerTests, Example)
 {
     Logger::instance()->setupDefault();
@@ -62,14 +72,14 @@ TEST_F(LoggerTests, Example)
     Logger *logger = Logger::instance();
 
     //! Destination and format
-    logger->clearLogDest();
+    logger->clearDests();
 
     //! Console
-    logger->addLogDest(new ConsoleLogDest(LogLayout("${time} | ${type} | ${tag} | ${thread} | ${message}")));
+    logger->addDest(new ConsoleLogDest(LogLayout("${time} | ${type|5} | ${tag|26} | ${thread} | ${message}")));
 
     //! File,this creates a file named "apppath/logs/myapp-yyMMdd.log"
     QString logPath = qApp->applicationDirPath() + "/logs";
-    logger->addLogDest(new FileLogDest(logPath, "myapp", "log", LogLayout("${datetime} | ${type} | ${tag} | ${thread} | ${message}")));
+    logger->addDest(new FileLogDest(logPath, "myapp", "log", LogLayout("${datetime} | ${type|5} | ${tag|26} | ${thread} | ${message}")));
 
     /** NOTE Layout have a tags
     "${datetime}"   - yyyy-MM-ddThh:mm:ss.zzz
@@ -79,6 +89,8 @@ TEST_F(LoggerTests, Example)
     "${thread}"     - thread, the main thread output as "main" otherwise hex
     "${message}"    - message
     "${trimmessage}" - trimmed message
+
+    |N - min field width
       */
 
 
@@ -111,22 +123,138 @@ TEST_F(LoggerTests, Example)
     //! Custom log macro - see log.h
 }
 
-class LogDestMock: public LogDest {
-public:
-    LogDestMock() : LogDest(LogLayout("")) {}
+TEST_F(LoggerTests, Logger_DefaultSetup)
+{
+    Logger* logger = Logger::instance();
+    logger->setupDefault();
 
-    void write(const LogMsg &_msg) { msgs.append(_msg); }
+    //! Default dest to console
+    QList<LogDest*> dests = logger->dests();
+    ASSERT_EQ(dests.count(), 1);
 
-    QList<LogMsg> msgs;
-};
+    LogDest* dest = dests.at(0);
+    EXPECT_EQ(dest->name(), "ConsoleLogDest");
+
+    //! Format output to console
+    EXPECT_EQ_STR(dest->layout().format(), "${time} | ${type|5} | ${tag|26} | ${thread} | ${message}");
+
+    //! Level Normal
+    EXPECT_EQ(logger->level(), Logger::Normal);
+
+    //! Types ERROR, WARN, INFO, DEBUG
+    QSet<QString> types = logger->types();
+    EXPECT_EQ(types.count(), 4);
+    EXPECT_TRUE(types.contains("ERROR"));
+    EXPECT_TRUE(types.contains("WARN"));
+    EXPECT_TRUE(types.contains("INFO"));
+    EXPECT_TRUE(types.contains("DEBUG"));
+
+    //! Catch Qt message
+    LogDestMock *dest2 = new LogDestMock();
+    logger->addDest(dest2);
+
+    qWarning() << "Catch Qt message";
+
+    ASSERT_EQ(dest2->msgs.count(), 1);
+    LogMsg dest2Msg = dest2->msgs.at(0);
+    EXPECT_EQ_STR(dest2Msg.tag, "Qt");
+    EXPECT_EQ_STR(dest2Msg.message, "Catch Qt message");
+}
+
+TEST_F(LoggerTests, LOG)
+{
+    Logger* logger = Logger::instance();
+    logger->setupDefault();
+    logger->clearDests();
+    LogDestMock *dest = new LogDestMock();
+    logger->addDest(dest);
+
+#undef LOG_TAG
+#define LOG_TAG CLASSNAME(Q_FUNC_INFO) //! NOTE Default log tag, see log.h
+
+    LOGE() << "Error msg";
+    ASSERT_EQ(dest->msgs.count(), 1);
+    EXPECT_EQ_STR(dest->msgs.at(0).type, "ERROR");
+    EXPECT_EQ_STR(dest->msgs.at(0).tag, " LoggerTests_LOG_Test");        //! NOTE LoggerTests_LOG_Test - class name
+    EXPECT_EQ_STR(dest->msgs.at(0).message, "TestBody() Error msg ");   //! NOTE TestBody() - function name
+
+    LOGW() << "Warning msg";
+    ASSERT_EQ(dest->msgs.count(), 2);
+    EXPECT_EQ_STR(dest->msgs.at(1).type, "WARN");
+    EXPECT_EQ_STR(dest->msgs.at(1).tag, " LoggerTests_LOG_Test");
+    EXPECT_EQ_STR(dest->msgs.at(1).message, "TestBody() Warning msg ");
+
+    LOGI() << "Info msg";
+    ASSERT_EQ(dest->msgs.count(), 3);
+    EXPECT_EQ_STR(dest->msgs.at(2).type, "INFO");
+    EXPECT_EQ_STR(dest->msgs.at(2).tag, " LoggerTests_LOG_Test");
+    EXPECT_EQ_STR(dest->msgs.at(2).message, "TestBody() Info msg ");
+
+    LOGD() << "Debug msg";
+    ASSERT_EQ(dest->msgs.count(), 3); //! NOTE Not output with log level Normal (default)
+
+    logger->setLevel(Logger::Debug);
+
+    LOGD() << "Debug msg";
+    ASSERT_EQ(dest->msgs.count(), 4);
+    EXPECT_EQ_STR(dest->msgs.at(3).type, "DEBUG");
+    EXPECT_EQ_STR(dest->msgs.at(3).tag, " LoggerTests_LOG_Test");
+    EXPECT_EQ_STR(dest->msgs.at(3).message, "TestBody() Debug msg ");
+}
+
+TEST_F(LoggerTests, QtDebug)
+{
+    Logger* logger = Logger::instance();
+    logger->setupDefault();
+    logger->clearDests();
+    LogDestMock *dest = new LogDestMock();
+    logger->addDest(dest);
+
+    qCritical() << "Error msg";
+    ASSERT_EQ(dest->msgs.count(), 1);
+    EXPECT_EQ_STR(dest->msgs.at(0).type, "ERROR");
+    EXPECT_EQ_STR(dest->msgs.at(0).tag, "Qt");
+    EXPECT_EQ_STR(dest->msgs.at(0).message, "Error msg");
+
+    qWarning() << "Warning msg";
+    ASSERT_EQ(dest->msgs.count(), 2);
+    EXPECT_EQ_STR(dest->msgs.at(1).type, "WARN");
+    EXPECT_EQ_STR(dest->msgs.at(1).tag, "Qt");
+    EXPECT_EQ_STR(dest->msgs.at(1).message, "Warning msg");
+
+    bool isInfo = false;
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 5, 0))
+    isInfo = true;
+
+    qInfo() << "Info msg";
+    ASSERT_EQ(dest->msgs.count(), 3);
+    EXPECT_EQ_STR(dest->msgs.at(2).type, "INFO");
+    EXPECT_EQ_STR(dest->msgs.at(2).tag, "Qt");
+    EXPECT_EQ_STR(dest->msgs.at(2).message, "Info msg");
+#endif
+
+    qDebug() << "Debug msg";
+    int count = isInfo ? 3 : 2;
+    ASSERT_EQ(dest->msgs.count(), count); //! NOTE Not output with log level Normal (default)
+
+    logger->setLevel(Logger::Debug);
+
+    qDebug() << "Debug msg";
+    count = isInfo ? 4 : 3;
+    int index = isInfo ? 3 : 2;
+    ASSERT_EQ(dest->msgs.count(), count);
+    EXPECT_EQ_STR(dest->msgs.at(index).type, "DEBUG");
+    EXPECT_EQ_STR(dest->msgs.at(index).tag, "Qt");
+    EXPECT_EQ_STR(dest->msgs.at(index).message, "Debug msg");
+}
 
 TEST_F(LoggerTests, Logger_Dest)
 {
     LogDestMock *dest1 = new LogDestMock();
     LogDestMock *dest2 = new LogDestMock();
-    Logger::instance()->clearLogDest();
-    Logger::instance()->addLogDest(dest1);
-    Logger::instance()->addLogDest(dest2);
+    Logger::instance()->clearDests();
+    Logger::instance()->addDest(dest1);
+    Logger::instance()->addDest(dest2);
 
     LOG_STREAM("INFO", "MYTAG") << "TestDestMsg";
 
@@ -246,8 +374,8 @@ TEST_F(LoggerTests, Logger_CatchQtMsg)
     logger->setLevel(Logger::Debug);
 
     LogDestMock *dest = new LogDestMock();
-    logger->clearLogDest();
-    logger->addLogDest(dest);
+    logger->clearDests();
+    logger->addDest(dest);
 
     logger->setIsCatchQtMsg(true);
 
@@ -394,9 +522,9 @@ TEST_F(LoggerTests, Overhead_Noop)
 {
     Logger::instance()->setLevel(Logger::Debug);
     Logger::instance()->setIsCatchQtMsg(false); //! NOTE For output overhead
-    Logger::instance()->clearLogDest();
-    Logger::instance()->addLogDest(new NoopLogDest(LogLayout("${time} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like console
-    Logger::instance()->addLogDest(new NoopLogDest(LogLayout("${datetime} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like file
+    Logger::instance()->clearDests();
+    Logger::instance()->addDest(new MemLogDest(LogLayout("${time} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like console
+    Logger::instance()->addDest(new MemLogDest(LogLayout("${datetime} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like file
 
     OverheadFuncs funcs;
 
@@ -409,9 +537,9 @@ TEST_F(LoggerTests, Overhead_NoDebug)
 {
     Logger::instance()->setLevel(Logger::Normal);
     Logger::instance()->setIsCatchQtMsg(false); //! NOTE For output overhead
-    Logger::instance()->clearLogDest();
-    Logger::instance()->addLogDest(new NoopLogDest(LogLayout("${time} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like console
-    Logger::instance()->addLogDest(new NoopLogDest(LogLayout("${datetime} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like file
+    Logger::instance()->clearDests();
+    Logger::instance()->addDest(new MemLogDest(LogLayout("${time} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like console
+    Logger::instance()->addDest(new MemLogDest(LogLayout("${datetime} | ${type} | ${tag} | ${thread} | ${message}"))); //! Like file
 
     OverheadFuncs funcs;
 

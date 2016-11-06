@@ -8,12 +8,15 @@
 namespace QZebraDev
 {
 
-class NoopLogDest : public LogDest
+class MemLogDest : public LogDest
 {
 public:
-    NoopLogDest(const LogLayout &l);
+    MemLogDest(const LogLayout &l);
 
+    QString name() const;
     void write(const LogMsg &logMsg);
+
+    QString content() const;
 
 private:
     QTextStream m_stream;
@@ -26,6 +29,7 @@ public:
     FileLogDest(const QString &path, const QString &name, const QString &ext, const LogLayout &l);
     ~FileLogDest();
 
+    QString name() const;
     void write(const LogMsg &logMsg);
 
 private:
@@ -44,14 +48,7 @@ class ConsoleLogDest : public LogDest
 public:
     explicit ConsoleLogDest(const LogLayout &l);
 
-    void write(const LogMsg &logMsg);
-};
-
-class StdOutDest : public LogDest
-{
-public:
-    explicit StdOutDest(const LogLayout &l);
-
+    QString name() const;
     void write(const LogMsg &logMsg);
 };
 

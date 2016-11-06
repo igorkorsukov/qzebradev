@@ -1,6 +1,8 @@
 #include "logger.h"
 #include <QCoreApplication>
 
+#include "logdefdest.h"
+
 using namespace QZebraDev;
 
 // Layout ---------------------------------
@@ -220,6 +222,14 @@ QString LogLayout::formatTime(const QTime &t) const
     return str;
 }
 
+QString LogLayout::format() const
+{
+    return m_format;
+}
+
+
+// LogDest ---------------------------------
+
 LogDest::LogDest(const LogLayout &l) : m_layout(l)
 {}
 
@@ -230,8 +240,6 @@ LogLayout LogDest::layout() const
 {
     return m_layout;
 }
-
-#include "logdefdest.h"
 
 // Logger ---------------------------------
 Logger *Logger::s_logger = 0;
@@ -250,13 +258,13 @@ Logger::~Logger()
 {
     Logger::s_logger = 0;
     setIsCatchQtMsg(false);
-    clearLogDest();
+    clearDests();
 }
 
 void Logger::setupDefault()
 {
-    clearLogDest();
-    addLogDest(new ConsoleLogDest(LogLayout("${time} | ${type} | ${tag} | ${thread} | ${message}")));
+    clearDests();
+    addDest(new ConsoleLogDest(LogLayout("${time} | ${type|5} | ${tag|26} | ${thread} | ${message}")));
 
     m_level = Normal;
 
@@ -270,7 +278,7 @@ void Logger::write(const LogMsg &logMsg)
 {
     QMutexLocker locker(&m_mutex);
     if (isAsseptMsg(logMsg.type)) {
-        foreach (LogDest *dest, m_destList) {
+        foreach (LogDest *dest, m_dests) {
             dest->write(logMsg);
         }
     }
@@ -286,16 +294,21 @@ bool Logger::isType(const QString &type) const
     return m_types.contains(type);
 }
 
-void Logger::addLogDest(LogDest *dest)
+void Logger::addDest(LogDest *dest)
 {
     Q_ASSERT(dest);
-    m_destList.append(dest);
+    m_dests.append(dest);
 }
 
-void Logger::clearLogDest()
+QList<LogDest*> Logger::dests() const
 {
-    qDeleteAll(m_destList);
-    m_destList.clear();
+    return m_dests;
+}
+
+void Logger::clearDests()
+{
+    qDeleteAll(m_dests);
+    m_dests.clear();
 }
 
 void Logger::setLevel(const Level level)

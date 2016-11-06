@@ -1,20 +1,29 @@
 #include "logdefdest.h"
 #include <QDir>
-#include <QCoreApplication>
+#include <QTextCodec>
 
 using namespace QZebraDev;
 
-NoopLogDest::NoopLogDest(const LogLayout &l)
+MemLogDest::MemLogDest(const LogLayout &l)
     : LogDest(l), m_stream(&m_str)
 {
 
 }
 
-void NoopLogDest::write(const LogMsg &logMsg)
+QString MemLogDest::name() const
+{
+    return "MemLogDest";
+}
+
+void MemLogDest::write(const LogMsg &logMsg)
 {
     m_stream << m_layout.output(logMsg) << "\r\n";
     m_stream.flush();
-    m_str.clear();
+}
+
+QString MemLogDest::content() const
+{
+    return m_str;
 }
 
 // FileLogDest
@@ -28,6 +37,11 @@ FileLogDest::~FileLogDest()
 {
     if (m_file.isOpen())
         m_file.close();
+}
+
+QString FileLogDest::name() const
+{
+    return "FileLogDest";
 }
 
 void FileLogDest::write(const LogMsg &logMsg)
@@ -68,6 +82,11 @@ ConsoleLogDest::ConsoleLogDest(const LogLayout &l)
 {
 }
 
+QString ConsoleLogDest::name() const
+{
+    return "ConsoleLogDest";
+}
+
 #if defined (Q_OS_ANDROID)
 #include <android/log.h>
 void ConsoleLogDest::write(const LogMsg &logMsg)
@@ -86,9 +105,6 @@ void ConsoleLogDest::write(const LogMsg &logMsg)
 }
 
 #else
-
-#include <QTextCodec>
-#include <QTextStream>
 
 struct StdOut {
     QTextStream stream;

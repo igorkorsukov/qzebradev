@@ -2,10 +2,9 @@
 #define QZebraDev_LOGGER_H
 
 #include <QDebug>
-#include <QVector>
+#include <QList>
 #include <QMutex>
 #include <QThread>
-#include <QStringList>
 #include <cassert>
 #include <QDateTime>
 
@@ -49,6 +48,8 @@ public:
         Pattern() : index(-1), count(0), minWidth(0) {}
     };
 
+    QString format() const;
+
     virtual QString output(const LogMsg &logMsg) const;
 
     virtual QString formatPattern(const LogMsg &logMsg, const Pattern &p) const;
@@ -73,7 +74,9 @@ public:
     explicit LogDest(const LogLayout &l);
     virtual ~LogDest();
     
+    virtual QString name() const = 0;
     virtual void write(const LogMsg &logMsg) = 0;
+
     LogLayout layout() const;
     
 protected:
@@ -123,8 +126,9 @@ public:
 
     void write(const LogMsg &logMsg);
     
-    void addLogDest(LogDest *dest);
-    void clearLogDest();
+    void addDest(LogDest *dest);
+    QList<LogDest *> dests() const;
+    void clearDests();
     
 private:
     Logger();
@@ -140,7 +144,7 @@ private:
     static QString qtMsgTypeToString(enum QtMsgType defType);
 
     Level m_level;
-    QVector<LogDest*> m_destList;
+    QList<LogDest*> m_dests;
     QSet<QString> m_types;
     QMutex m_mutex;
 };
