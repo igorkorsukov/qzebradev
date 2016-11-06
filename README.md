@@ -41,7 +41,9 @@ Features:
 * Steps duration measure 
 * Function duration measure 
 * Detecting long function during functions execution (It helps determine the hovering function)
+* Very small overhead
 * Enabled / disabled on compile time and run time
+* Thread safe (without use mutex)
 * Custom data printer
 
 [Example](https://github.com/igorkorsukov/qzebradev/blob/master/tests/profilertests.cpp#L13)
