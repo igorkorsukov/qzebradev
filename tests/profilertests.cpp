@@ -2,25 +2,13 @@
 #include "qzebradev/profiler.h"
 #include "qzebradev/profilerlogprinter.h"
 #include "qzebradev/logger.h"
-#include "qzebradev/gtesthelpful.h"
-
-#include <QElapsedTimer>
-#include "overhead.h"
 
 using namespace QZebraDev;
 
 struct Sleep : public QThread { using QThread::msleep; };
 
 class ProfilerTests : public ::testing::Test
-{
-protected:
-
-    ProfilerTests()
-    {
-        Logger::instance()->setupDefault();
-        Logger::instance()->setLevel(Logger::Debug);
-    }
-};
+{};
 
 struct Example {
 
@@ -80,7 +68,8 @@ struct Example {
 
 TEST_F(ProfilerTests, Example)
 {
-
+    Logger::instance()->setupDefault();
+    Logger::instance()->setLevel(Logger::Debug);
     Profiler::instance()->setup(Profiler::Options(), new ProfilerLogPrinter());
 
     //! Measurement duration of functions
@@ -127,6 +116,12 @@ TEST_F(ProfilerTests, Example)
     */
 
 }
+
+//! Tests ---------------------
+
+#include <QElapsedTimer>
+#include "qzebradev/gtesthelpful.h"
+#include "overhead.h"
 
 struct PrinterMock : public Profiler::Printer
 {
