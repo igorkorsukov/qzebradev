@@ -23,13 +23,13 @@ Features:
 To use Logger within your software project include the Logger source into your project
 
 Source:
-* logger.h - logger and base stuff
-* logger.cpp - logger and base stuff
-* logdefdest.h - default destinations for console and file 
-* logdefdest.cpp - default destinations for console and file 
-* log.h - macro for simple use logger
+* qzebradev/logger.h - logger and base stuff
+* qzebradev/logger.cpp - logger and base stuff
+* qzebradev/logdefdest.h - default destinations for console and file 
+* qzebradev/logdefdest.cpp - default destinations for console and file 
+* qzebradev/log.h - macro for simple use logger
 
-Change log.h change log as you see fit, remove unnecessary
+Change log.h as you see fit, remove unnecessary
 
 Or use all QZebraDev suite 
 
